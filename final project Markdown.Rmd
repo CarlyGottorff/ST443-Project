@@ -6,16 +6,60 @@ output: html_document
 ---
 
 ```{r}
+library("RSQLite")
+
+#Connect to data 
+db <- dbConnect(SQLite(),"C:/Users/cgott/Documents/ST449/Datasets/database.sqlite")
+## list all tables
+tables <- dbListTables(db)
+#Creating DF for each table
+Country <- dbGetQuery(db,"Select * from Country") 
+League <- dbGetQuery(db,"Select * from League")
+Match <- dbGetQuery(db,"Select * from Match")
+Player <- dbGetQuery(db,"Select * from Player")
+Player_Attributes <- dbGetQuery(db,"Select * from Player_Attributes")
+Team <- dbGetQuery(db,"Select * from Team")
+Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
 
 ```
 
 
 ```{r}
+#Data Cleaning
+yearSplit=Match[Match$season=="2015/2016",] #Extracting just the data for the 2015/2016 season 
+print(yearSplit[1:10,])
+
+#extracting data by English league 
+leagueSplit<-dbGetQuery(db, "SELECT  league_id, season, home_team_api_id, 
+            away_team_api_id, home_team_goal, away_team_goal, team_api_id, team_long_name
+           FROM Match JOIN Team
+            ON Match.home_team_api_id= Team.team_api_id
+           WHERE league_id='1729'")
+
+#creating outcome varibale for win, lose, tie
+
+for (i in 1:nrow(leagueSplit)){
+  if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
+    leagueSplit$outcome[i]<-"Tie"
+  }
+  if(leagueSplit$home_team_goal[i]>leagueSplit$away_team_goal[i]){
+    leagueSplit$outcome[i]<-"Win"
+  }
+  if(leagueSplit$home_team_goal[i]<leagueSplit$away_team_goal[i]){
+    leagueSplit$outcome[i]<-"Lose"
+  }
+}
+
+
 
 ```
 
 
 ```{r}
+#splitting data into training, testing
+set.seed(1234)
+train = sample(x = 3040, size = 1520)
+
 
 ```
 
