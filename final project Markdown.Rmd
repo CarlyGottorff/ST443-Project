@@ -59,20 +59,29 @@ for (i in 1:nrow(leagueSplit)){
 
 #need to do: 
 #create varible to negate season
-
 #create varible for counting number of win lose tie for each team
 leagueTable<-data.frame(table(leagueSplit$team_long_name))
 for(i in 1:length(leagueSplit)){
   if (leagueSplit$outcome[i] == "Win"){
-    if(leagueSplit$team_long_name==leagueTable$Var1){
-      leagueTable$win=+1
+    for(j in 1:length(leagueTable)){
+      if(leagueSplit$team_long_name[i]==leagueTable$Var1[j]){
+        leagueTable$win=+1
+      }
     }
   }
   if(leagueSplit $outcome[i] =="Lose"){
-    leagueTable$lose+1
+    for(j in i:length(leagueTable)){
+      if(leagueSplit$team_long_name==leagueTable$Var1){
+        leagueTable$lose=+1
+      }
+    }
   }
   if(leagueSplit$outcome[i] =="Tie"){
-    leagueTable$tie+1
+    for(j in i:length(leagueTable)){
+      if(leagueSplit$team_long_name[i]==leagueTable$Var1){
+        leagueTable$tie=+1
+      }
+    }
   }
 }
 
