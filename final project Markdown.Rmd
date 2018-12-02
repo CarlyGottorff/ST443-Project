@@ -126,9 +126,11 @@ gamesPlayedAH$percWin<- (gamesPlayedAH$n_win/gamesPlayedAH$totalPlayed)*100
 gamesPlayedAH[order(-gamesPlayedAH$percWin),]
 
 #frequency distribution of teams based on winning percentage
+library(ggplot2)
 plot_wins_freq <- 
   ggplot(gamesPlayedAH,aes(percWin))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
 plot_wins_freq
+
 
 
 ```
