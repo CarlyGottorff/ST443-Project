@@ -13,7 +13,7 @@ db <- dbConnect(SQLite(),"C:/Users/cgott/Documents/ST449/Datasets/database.sqlit
 ## list all tables
 tables <- dbListTables(db)
 #Creating DF for each table
-Country <- dbGetQuery(db,"Select * from Country") 
+Country <- dbGetQuery(db,"Select * from Country")
 League <- dbGetQuery(db,"Select * from League")
 Match <- dbGetQuery(db,"Select * from Match")
 Player <- dbGetQuery(db,"Select * from Player")
@@ -26,67 +26,109 @@ Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
 
 ```{r}
 #Data Cleaning
-yearSplit=Match[Match$season=="2015/2016",] #Extracting just the data for the 2015/2016 season 
-print(yearSplit[1:10,])
 
 #extracting data by English league 
-leagueSplit<-dbGetQuery(db, "SELECT  league_id, season, home_team_api_id, 
-            away_team_api_id, home_team_goal, away_team_goal, team_api_id, team_long_name
-           FROM Match JOIN Team
-            ON Match.home_team_api_id= Team.team_api_id
-           WHERE league_id='1729'")
+leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id, 
+            away_team_api_id, home_team_goal, away_team_goal
+           FROM Match 
+           WHERE league_id='1729' ")
 #counting number of games in each season for English league
 table(leagueSplit$season)
-#counting number of games played by each English team 
-gamesplayed<-dbGetQuery(db, "SELECT  league_id, home_team_api_id, team_api_id, team_long_name, COUNT(*)
-           FROM Match JOIN Team
-            ON Match.home_team_api_id= Team.team_api_id
-           WHERE league_id='1729'
-           GROUP BY team_api_id")
 
-#creating outcome varibale for win, lose, tie
+#counting number of away matches for each team with long name
+gamesPlayedAway<-dbGetQuery(db, "SELECT away_team_api_id, team_long_name, COUNT(away_team_api_id)
+           FROM Match JOIN Team
+            ON Match.away_team_api_id= Team.team_api_id
+           WHERE league_id='1729'
+           GROUP BY away_team_api_id")
+#counting number of home matches for each team
+gamesPlayedHome<-dbGetQuery(db, "SELECT home_team_api_id, COUNT(home_team_api_id)
+           FROM Match 
+           WHERE league_id='1729'
+           GROUP BY home_team_api_id")
+
+#merging away and home matches
+colnames(gamesPlayedAway)<-c("team_api_id","team_long_name", "away_games")
+colnames(gamesPlayedHome)= c("team_api_id", "home_games")
+gamesPlayedAH<-merge(gamesPlayedAway, gamesPlayedHome, by="team_api_id")
+#adding total games
+gamesPlayedAH$totalPlayed<-(gamesPlayedAH$away_games+gamesPlayedAH$home_games)
+
+#creating outcome varibale for win, lose, tie for home team
 for (i in 1:nrow(leagueSplit)){
   if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Tie"
+    leagueSplit$outcomeHome[i]<-"Tie"
   }
   if(leagueSplit$home_team_goal[i]>leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Win"
+    leagueSplit$outcomeHome[i]<-"Win"
   }
   if(leagueSplit$home_team_goal[i]<leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Lose"
+    leagueSplit$outcomeHome[i]<-"Lose"
   }
 }
+#creating win lose tie for away team
+for (i in 1:nrow(leagueSplit)){
+  if(leagueSplit$outcomeHome[i]=="Tie"){
+    leagueSplit$outcomeAway[i]<-"Tie"
+  }
+  if(leagueSplit$outcomeHome[i]=="Win"){
+    leagueSplit$outcomeAway[i]<-"Lose"
+  }
+  if(leagueSplit$outcomeHome[i]=="Lose"){
+    leagueSplit$outcomeAway[i]<-"Win"
+  }
+}
+
+
+library(dplyr)
+#counting number of wins, loses, ties at home
+homeOutcome<-leagueSplit %>%
+  group_by(home_team_api_id, outcomeHome) %>%
+  tally()
+colnames(homeOutcome)=c("home_team_api_id", "home_outcome", "n_home_outcome")
+#counting number of wins, loses ties away
+awayOutcome<-leagueSplit %>%
+  group_by(away_team_api_id, outcomeAway) %>%
+  tally()
+colnames(awayOutcome)=c("away_team_api_id", "away_outcome", "n_away_outcome")
+#merging to get total win, lose tie
+outcome<-cbind(homeOutcome, awayOutcome)
+outcome$total<-outcome$n_home_outcome+ outcome$n_away_outcome #creating total
+outcome<-outcome[,c(1,2,7)] #removing unnecessary columns
+colnames(outcome)=c("team_api_id", "outcome", "n_outcome")
+
+#subsetting and merging into gamesPlayedAH
+lose<-outcome[outcome$outcome=="Lose",]
+lose<-lose[,c(1,3)]
+colnames(lose)=c("team_api_id", "n_lose")
+win<-outcome[outcome$outcome=="Win",]
+win<-win[,c(1,3)]
+colnames(win)=c("team_api_id", "n_win")
+tie<-outcome[outcome$outcome=="Tie",]
+tie<-tie[,c(1,3)]
+colnames(tie)=c("team_api_id", "n_tie")
+gamesPlayedAH<-merge(gamesPlayedAH,lose, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,win, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,tie, by="team_api_id")
 
 #need to do: 
 #create varible to negate season
-#create varible for counting number of win lose tie for each team
-leagueTable<-data.frame(table(leagueSplit$team_long_name))
-for(i in 1:length(leagueSplit)){
-  if (leagueSplit$outcome[i] == "Win"){
-    for(j in 1:length(leagueTable)){
-      if(leagueSplit$team_long_name[i]==leagueTable$Var1[j]){
-        leagueTable$win=+1
-      }
-    }
-  }
-  if(leagueSplit $outcome[i] =="Lose"){
-    for(j in i:length(leagueTable)){
-      if(leagueSplit$team_long_name==leagueTable$Var1){
-        leagueTable$lose=+1
-      }
-    }
-  }
-  if(leagueSplit$outcome[i] =="Tie"){
-    for(j in i:length(leagueTable)){
-      if(leagueSplit$team_long_name[i]==leagueTable$Var1){
-        leagueTable$tie=+1
-      }
-    }
-  }
-}
 
-teamMerge<-merge(leagueSplit, Team_Attributes, by="team_api_id")
-teamMerge<-teamMerge[!is.na(teamMerge$outcome),]
+
+```
+
+
+```{r}
+#exploritory statistics
+#creat percent win 
+gamesPlayedAH$percWin<- (gamesPlayedAH$n_win/gamesPlayedAH$totalPlayed)*100
+#ordering datat by the highest percent win
+gamesPlayedAH[order(-gamesPlayedAH$percWin),]
+
+#frequency distribution of teams based on winning percentage
+plot_wins_freq <- 
+  ggplot(gamesPlayedAH,aes(percWin))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
+plot_wins_freq
 
 
 ```
@@ -96,6 +138,7 @@ teamMerge<-teamMerge[!is.na(teamMerge$outcome),]
 #splitting data into training, testing
 set.seed(1234)
 train = sample(x = 3040, size = 1520)
+
 
 
 
