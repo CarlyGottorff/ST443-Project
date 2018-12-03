@@ -29,9 +29,14 @@ Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
 
 #extracting data by English league 
 leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id, 
-            away_team_api_id, home_team_goal, away_team_goal
+            away_team_api_id, home_team_goal, away_team_goal, B365H, B365A, B365D, BWH, BWA, BWD, IwA, IWH, IWD, LBH, LBA, LBD, PSH, PSD, PSA, WHA,WHH, WHD, SJA,SJD,SJH, VCA,VCH,VCD,GBA, GBH, GBD, BSH, BSA, BSD
            FROM Match 
            WHERE league_id='1729' ")
+
+playerStats<-dbGetQuery(db,"
+          SELECT home_player_X1,home_player_X2,home_player_X3,home_player_X4,home_player_X5,home_player_X6,home_player_X7,home_player_X8,home_player_X9,home_player_X10,home_player_X11,   away_player_X1,away_player_X2,away_player_X3,away_player_X4,away_player_X5,away_player_X6,away_player_X7,away_player_X8,away_player_X9,away_player_X10,away_player_X11,  home_player_Y1,home_player_Y2,home_player_Y3,home_player_Y4,home_player_Y5,home_player_Y6,home_player_Y7,home_player_Y8,home_player_Y9,home_player_Y10,home_player_Y11,  away_player_Y1, away_player_Y2,away_player_Y3,away_player_Y4,away_player_Y5,away_player_Y6,away_player_Y7,away_player_Y8,away_player_Y9,away_player_Y10,away_player_Y11
+          FROM Match
+          WHERE league_id='1729' ")
 #counting number of games in each season for English league
 table(leagueSplit$season)
 
@@ -188,6 +193,7 @@ gamesPlayedAH$percWinAwayTot<-(gamesPlayedAH$n_away_win/gamesPlayedAH$totalPlaye
 #create varible to negate season
 
 
+
 ```
 
 
@@ -222,9 +228,12 @@ plot_wins_home_freq
 ```{r}
 #splitting data into training, testing
 set.seed(1234)
-train = sample(x = 3040, size = 1520)
+smp_size= floor(0.5* nrow(leagueSplit))
+train_ind = sample(seq_len(nrow(leagueSplit)),size=smp_size)
+train<- leagueSplit[train_ind,]
+test<-leagueSplit[-train_ind,]
 
-
+#logistic regression on training data
 
 
 ```
