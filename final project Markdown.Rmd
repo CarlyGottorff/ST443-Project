@@ -13,7 +13,7 @@ db <- dbConnect(SQLite(),"C:/Users/cgott/Documents/ST449/Datasets/database.sqlit
 ## list all tables
 tables <- dbListTables(db)
 #Creating DF for each table
-Country <- dbGetQuery(db,"Select * from Country") 
+Country <- dbGetQuery(db,"Select * from Country")
 League <- dbGetQuery(db,"Select * from League")
 Match <- dbGetQuery(db,"Select * from Match")
 Player <- dbGetQuery(db,"Select * from Player")
@@ -26,70 +26,195 @@ Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
 
 ```{r}
 #Data Cleaning
-yearSplit=Match[Match$season=="2015/2016",] #Extracting just the data for the 2015/2016 season 
-print(yearSplit[1:10,])
 
 #extracting data by English league 
-leagueSplit<-dbGetQuery(db, "SELECT  league_id, season, home_team_api_id, 
-            away_team_api_id, home_team_goal, away_team_goal, team_api_id, team_long_name
-           FROM Match JOIN Team
-            ON Match.home_team_api_id= Team.team_api_id
-           WHERE league_id='1729'")
+leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id, 
+            away_team_api_id, home_team_goal, away_team_goal, B365H, B365A, B365D, BWH, BWA, BWD, IwA, IWH, IWD, LBH, LBA, LBD, PSH, PSD, PSA, WHA,WHH, WHD, SJA,SJD,SJH, VCA,VCH,VCD,GBA, GBH, GBD, BSH, BSA, BSD
+           FROM Match 
+           WHERE league_id='1729' ")
 #counting number of games in each season for English league
 table(leagueSplit$season)
-#counting number of games played by each English team 
-gamesplayed<-dbGetQuery(db, "SELECT  league_id, home_team_api_id, team_api_id, team_long_name, COUNT(*)
-           FROM Match JOIN Team
-            ON Match.home_team_api_id= Team.team_api_id
-           WHERE league_id='1729'
-           GROUP BY team_api_id")
 
-#creating outcome varibale for win, lose, tie
+#counting number of away matches for each team with long name
+gamesPlayedAway<-dbGetQuery(db, "SELECT away_team_api_id, team_long_name, COUNT(away_team_api_id)
+           FROM Match JOIN Team
+            ON Match.away_team_api_id= Team.team_api_id
+           WHERE league_id='1729'
+           GROUP BY away_team_api_id")
+#counting number of home matches for each team
+gamesPlayedHome<-dbGetQuery(db, "SELECT home_team_api_id, COUNT(home_team_api_id)
+           FROM Match 
+           WHERE league_id='1729'
+           GROUP BY home_team_api_id")
+
+#merging away and home matches
+colnames(gamesPlayedAway)<-c("team_api_id","team_long_name", "away_games")
+colnames(gamesPlayedHome)= c("team_api_id", "home_games")
+gamesPlayedAH<-merge(gamesPlayedAway, gamesPlayedHome, by="team_api_id")
+#adding total games
+gamesPlayedAH$totalPlayed<-(gamesPlayedAH$away_games+gamesPlayedAH$home_games)
+```
+
+
+```{r}
+#creating outcome varibale for win, lose, tie for home team
 for (i in 1:nrow(leagueSplit)){
   if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Tie"
+    leagueSplit$homeTie[i]=1
+  } else{
+    leagueSplit$homeTie[i]=0
   }
   if(leagueSplit$home_team_goal[i]>leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Win"
+    leagueSplit$homeWin[i]=1
+  }else{
+    leagueSplit$homeWin[i]=0
   }
   if(leagueSplit$home_team_goal[i]<leagueSplit$away_team_goal[i]){
-    leagueSplit$outcome[i]<-"Lose"
+    leagueSplit$homeLose[i]=1
+  }else{
+    leagueSplit$homeLose[i]=0
+  }
+}
+#creating win lose tie for away team
+for (i in 1:nrow(leagueSplit)){
+  if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
+    leagueSplit$awayTie[i]=1
+  } else{
+    leagueSplit$awayTie[i]=0
+  }
+  if(leagueSplit$away_team_goal[i]>leagueSplit$home_team_goal[i]){
+    leagueSplit$awayWin[i]=1
+  }else{
+    leagueSplit$awayWin[i]=0
+  }
+  if(leagueSplit$away_team_goal[i]<leagueSplit$home_team_goal[i]){
+    leagueSplit$awayLose[i]=1
+  }else{
+    leagueSplit$awayLose[i]=0
   }
 }
 
+```
+
+
+```{r}
+library(dplyr)
+#counting number of wins, loses, ties by team
+#homeTie
+homeTie<-leagueSplit %>%
+  group_by(home_team_api_id, homeTie) %>%
+  tally()
+homeTie<-homeTie[homeTie$homeTie==1,] #removing cases of 0
+homeTie<-homeTie[,c(1,3)]
+colnames(homeTie)=c("team_api_id", "n_home_tie")
+
+#home win
+homeWin<-leagueSplit %>%
+  group_by(home_team_api_id, homeWin) %>%
+  tally()
+homeWin<-homeWin[homeWin$homeWin==1,] #removing cases of 0
+homeWin<-homeWin[,c(1,3)]
+colnames(homeWin)=c("team_api_id", "n_home_win")
+
+#home lose
+homeLose<-leagueSplit %>%
+  group_by(home_team_api_id, homeLose) %>%
+  tally()
+homeLose<-homeLose[homeLose$homeLose==1,] #removing cases of 0
+homeLose<-homeLose[,c(1,3)]
+colnames(homeLose)=c("team_api_id", "n_home_lose")
+
+#awayTie
+awayTie<-leagueSplit %>%
+  group_by(home_team_api_id, awayTie) %>%
+  tally()
+awayTie<-awayTie[awayTie$awayTie==1,] #removing cases of 0
+awayTie<-awayTie[,c(1,3)]
+colnames(awayTie)=c("team_api_id", "n_away_tie")
+
+#away win
+awayWin<-leagueSplit %>%
+  group_by(home_team_api_id, awayWin) %>%
+  tally()
+awayWin<-awayWin[awayWin$awayWin==1,] #removing cases of 0
+awayWin<-awayWin[,c(1,3)]
+colnames(awayWin)=c("team_api_id", "n_away_win")
+
+#away lose
+awayLose<-leagueSplit %>%
+  group_by(home_team_api_id, awayLose) %>%
+  tally()
+awayLose<-awayLose[awayLose$awayLose==1,] #removing cases of 0
+awayLose<-awayLose[,c(1,3)]
+colnames(awayLose)=c("team_api_id", "n_away_lose")
+
+#merging into gamesPlayedAH
+gamesPlayedAH<-merge(gamesPlayedAH,homeTie, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,homeWin, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,homeLose, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayTie, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayWin, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayLose, by="team_api_id")
+
+#checking
+gamesPlayedAH$tot<-(gamesPlayedAH$n_home_tie+gamesPlayedAH$n_home_win+gamesPlayedAH$n_home_lose+gamesPlayedAH$n_away_tie+gamesPlayedAH$n_away_lose+gamesPlayedAH$n_away_win)
+gamesPlayedAH$correct<-(gamesPlayedAH$totalPlayed==gamesPlayedAH$tot)
+```
+
+```{r}
+#creating total win lose tie variables
+gamesPlayedAH$totWin<-(gamesPlayedAH$n_home_win+gamesPlayedAH$n_away_win)
+gamesPlayedAH$totLose<-(gamesPlayedAH$n_home_lose+gamesPlayedAH$n_away_lose)
+gamesPlayedAH$totTie<-(gamesPlayedAH$n_home_tie+gamesPlayedAH$n_away_tie)
+
+#creating percent win tie for totals
+gamesPlayedAH$percWin<-(gamesPlayedAH$totWin/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percLose<-(gamesPlayedAH$totLose/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percTie<-(gamesPlayedAH$totTie/gamesPlayedAH$totalPlayed)*100
+
+#breakdownwin home or away by total wins 
+gamesPlayedAH$percWinHome<-(gamesPlayedAH$n_home_win/gamesPlayedAH$totWin)*100
+gamesPlayedAH$percWinAway<-(gamesPlayedAH$n_away_win/gamesPlayedAH$totWin)*100
+
+#breakdown win home or away by total games
+gamesPlayedAH$percWinHomeTot<-(gamesPlayedAH$n_home_win/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percWinAwayTot<-(gamesPlayedAH$n_away_win/gamesPlayedAH$totalPlayed)*100
+
+```
+
+
+```{r}
 #need to do: 
 #create varible to negate season
 
-#create varible for counting number of win lose tie for each team
-leagueTable<-data.frame(table(leagueSplit$team_long_name))
-for(i in 1:length(leagueSplit)){
-  if (leagueSplit$outcome[i] == "Win"){
-    if(leagueSplit$team_long_name==leagueTable$Var1){
-      leagueTable$win=+1
-    }
-  }
-  if(leagueSplit $outcome[i] =="Lose"){
-    leagueTable$lose+1
-  }
-  if(leagueSplit$outcome[i] =="Tie"){
-    leagueTable$tie+1
-  }
-}
-
-teamMerge<-merge(leagueSplit, Team_Attributes, by="team_api_id")
-teamMerge<-teamMerge[!is.na(teamMerge$outcome),]
 
 
 ```
 
 
 ```{r}
-#splitting data into training, testing
-set.seed(1234)
-train = sample(x = 3040, size = 1520)
+#exploritory statistics
 
+#ordering data by the highest percent win
+gamesPlayedAH[order(-gamesPlayedAH$percWin),]
+#ordering data by highest percent win at home of all wins 
+gamesPlayedAH[order(-gamesPlayedAH$percWinHome),]
+#ordering by highest percent win away  of all wins 
+gamesPlayedAH[order(-gamesPlayedAH$percWinAway),]
+#ordering by highest percent win home by total games played
+gamesPlayedAH[order(-gamesPlayedAH$percWinHomeTot),]
+#odering by highest percent win away by total games played 
+gamesPlayedAH[order(-gamesPlayedAH$percWinAwayTot),]
 
+#frequency distribution of teams based on winning percentage
+library(ggplot2)
+plot_wins_freq <- 
+  ggplot(gamesPlayedAH,aes(percWin))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
+plot_wins_freq
+
+library(ggplot2)
+plot_wins_home_freq <- 
+  ggplot(gamesPlayedAH,aes(percWinHomeTot))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
+plot_wins_home_freq
 
 ```
-
-
