@@ -131,39 +131,34 @@ for (i in 1:length(Team_Attributes$date)){
 }
 
 #seperating season to get the start year in order to merge with team attributes
-leagueSplit<-transform(leagueSplit, season= colsplit(season, split="\\/", names=c("seasonStart", "SeasonStop")))
-
-#creating new variable to remove the df or there will be column counting issues in code. 
-for (i in 1:length(leagueSplit$season)){
-  leagueSplit$SeasonStart<-leagueSplit$season$seasonStart[i]
+for(i in 1:length(leagueSplit$season)){
+  leagueSplit$seasonStart[i]<-substr(leagueSplit$season[i],1,4)
 }
-leagueSplit<- leagueSplit[,-leagueSplit$season$seasonStart]
-leagueSplit<- leagueSplit[,-leagueSplit$season$SeasonStop]
 
 #creating identifier to merge game data to home team stats for that season
 
-leagueSplit$p1<-paste0(leagueSplit$season$seasonStart, leagueSplit$home_team_api_id)
+leagueSplit$p1<-paste0(leagueSplit$seasonStart, leagueSplit$home_team_api_id)
 Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
 
 
 #merging dfs and keeping all values to avoid ommitting any. !is.na is used to remove the values in merge that were caused by the p1 values from other leagues in Team_Attributes. By doing this we makes sure the exact same number of matches are being accounted for. This merge uses home team API. _Therefore the team stats bound to each game are for the home team. _
-matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE);
+matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE)
 #removing unnecessary columns 
-matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)];
+matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)]
 #renaming columns to merge
-colnames(matchTeamAttHome)[9]<-"matchDate";
-colnames(matchTeamAttHome)[18]<-"homeStatsTakenDate";
-colnames(matchTeamAttHome)[19:26]<-c("homeBuildUpPlaySpeed", "homeBuildUpPlayPassing", "homeChanceCreationPassing", "homeChanceCreationCrossing", "homeChanceCreationShooting", "homeDefencePressure", "homeDefenceAggression", "homeDefenceTeamWidth");
+colnames(matchTeamAttHome)[7]<-"matchDate"
+colnames(matchTeamAttHome)[16]<-"homeStatsTakenDate"
+colnames(matchTeamAttHome)[17:24]<-c("homeBuildUpPlaySpeed", "homeBuildUpPlayPassing", "homeChanceCreationPassing", "homeChanceCreationCrossing", "homeChanceCreationShooting", "homeDefencePressure", "homeDefenceAggression", "homeDefenceTeamWidth")
 
 #creating identifier to merge game data to away team stats for that season
-leagueSplit$p2<-paste0(leagueSplit$season$seasonStart, leagueSplit$away_team_api_id)
+leagueSplit$p2<-paste0(leagueSplit$seasonStart, leagueSplit$away_team_api_id)
 Team_Attributes$p2<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
 #merging match data and away team data using method specified above
-matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=FALSE);
+matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=FALSE)
 #removing all unneccessary columns 
-matchTeamAttAway<- matchTeamAttAway[,-c(1:9,11:20,23:25,27,28,30,32,34,35,37,39,41:44)];
+matchTeamAttAway<- matchTeamAttAway[,-c(1:8,10:20,23:25,27,28,30,32,34,35,37,39,41,42,43,44)]
 #renaming columns 
-colnames(matchTeamAttAway)[2]<-"awayStatsTakenDate";
+colnames(matchTeamAttAway)[2]<-"awayStatsTakenDate"
 colnames(matchTeamAttAway)[3:10]<-c("awayBuildUpPlaySpeed", "awayBuildUpPlayPassing", "awayChanceCreationPassing", "awayChanceCreationCrossing", "awayChanceCreationShooting", "awayDefencePressure", "awayDefenceAggression", "awayDefenceTeamWidth")
 
 #760 values missing from each set beacuse there are no stats on those teams in that year. no stats for the 2008/2009 season. No stats for teams taken before 2010. the first stats start in 02-2010, which are coded into the 2009/2010 season for the reason exlained above.
