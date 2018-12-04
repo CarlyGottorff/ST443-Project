@@ -313,8 +313,8 @@ plot_wins_home_freq
 ```{r}
 #splitting into training and testing 
 #using last season in set (2015-2016) as the testing dataset, while all matches before the 2015-2016 season are in traiing
-test<-matchTeamAttHA[matchTeamAttHA$season$seasonStart==2015,]
-train<-matchTeamAttHA[matchTeamAttHA$season$seasonStart<2015,]
+test<-matchTeamAttHA[matchTeamAttHA$seasonStart.x==2015,]
+train<-matchTeamAttHA[matchTeamAttHA$seasonStart.x<2015,]
 
 ```
 
