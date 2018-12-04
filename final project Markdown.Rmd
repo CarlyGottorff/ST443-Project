@@ -7,7 +7,6 @@ output: html_document
 
 ```{r}
 library("RSQLite")
-
 #Connect to data 
 db <- dbConnect(SQLite(),"C:/Users/cgott/Documents/ST449/Datasets/database.sqlite")
 ## list all tables
@@ -28,17 +27,12 @@ Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
 #Data Cleaning
 
 #extracting data by English league 
-leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id, 
-            away_team_api_id, home_team_goal, away_team_goal, B365H, B365A, B365D, BWH, BWA, BWD, IwA, IWH, IWD, LBH, LBA, LBD, PSH, PSD, PSA, WHA,WHH, WHD, SJA,SJD,SJH, VCA,VCH,VCD,GBA, GBH, GBD, BSH, BSA, BSD
+leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id,
+            away_team_api_id, home_team_goal, away_team_goal
            FROM Match 
            WHERE league_id='1729' ")
 
-playerStats<-dbGetQuery(db,"
-          SELECT home_player_X1,home_player_X2,home_player_X3,home_player_X4,home_player_X5,home_player_X6,home_player_X7,home_player_X8,home_player_X9,home_player_X10,home_player_X11,   away_player_X1,away_player_X2,away_player_X3,away_player_X4,away_player_X5,away_player_X6,away_player_X7,away_player_X8,away_player_X9,away_player_X10,away_player_X11,  home_player_Y1,home_player_Y2,home_player_Y3,home_player_Y4,home_player_Y5,home_player_Y6,home_player_Y7,home_player_Y8,home_player_Y9,home_player_Y10,home_player_Y11,  away_player_Y1, away_player_Y2,away_player_Y3,away_player_Y4,away_player_Y5,away_player_Y6,away_player_Y7,away_player_Y8,away_player_Y9,away_player_Y10,away_player_Y11
-          FROM Match
-          WHERE league_id='1729' ")
-#counting number of games in each season for English league
-table(leagueSplit$season)
+#B365H, B365A, B365D, BWH, BWA, BWD, IwA, IWH, IWD, LBH, LBA, LBD, PSH, PSD, PSA, WHA,WHH, WHD, SJA,SJD,SJH, VCA,VCH,VCD,GBA, GBH, GBD, BSH, BSA, BSD
 
 #counting number of away matches for each team with long name
 gamesPlayedAway<-dbGetQuery(db, "SELECT away_team_api_id, team_long_name, COUNT(away_team_api_id)
@@ -58,6 +52,63 @@ colnames(gamesPlayedHome)= c("team_api_id", "home_games")
 gamesPlayedAH<-merge(gamesPlayedAway, gamesPlayedHome, by="team_api_id")
 #adding total games
 gamesPlayedAH$totalPlayed<-(gamesPlayedAH$away_games+gamesPlayedAH$home_games)
+```
+
+
+```{r}
+#extracting team attributes and matching to games
+require(reshape)
+#creating season variable for teams to merge with games accurately. Because the season runs from 09-05. calculations done in 09 are for that years season start year, while calculations done in 02 are done for the previous years season start year.
+for (i in 1:length(Team_Attributes$date)){
+  if(substr(Team_Attributes$date[i],6,7)=="09"){
+    Team_Attributes$seasonStart[i]<-(substr(Team_Attributes$date[i],1,4))
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2016-02"){
+    Team_Attributes$seasonStart[i]<-"2015"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2015-02"){
+    Team_Attributes$seasonStart[i]<-"2014"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2014-02"){
+    Team_Attributes$seasonStart[i]<-"2013"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2013-02"){
+    Team_Attributes$seasonStart[i]<-"2012"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2012-02"){
+    Team_Attributes$seasonStart[i]<-"2011"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2011-02"){
+    Team_Attributes$seasonStart[i]<-"2010"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2010-02"){
+    Team_Attributes$seasonStart[i]<-"2009"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2009-02"){
+    Team_Attributes$seasonStart[i]<-"2008"
+  }
+}
+
+#seperating season to get the start year in order to merge with team attributes
+leagueSplit<-transform(leagueSplit, season= colsplit(season, split="\\/", names=c("seasonStart", "SeasonStop")))
+
+#creating identifier to merge game data to home team stats for that season
+
+leagueSplit$p1<-paste0(leagueSplit$season$seasonStart, leagueSplit$home_team_api_id)
+Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+
+#merging dfs and keeping all values to avoid ommitting any. !is.na is used to remove the values in merge that were caused by the p1 values from other leagues in Team_Attributes. By doing this we makes sure the exact same number of matches are being accounted for. This merge uses home team API. _Therefore the team stats bound to each game are for the home team. _
+matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=TRUE)
+matchTeamAttHome<-matchTeamAttHome[!is.na(matchTeamAttHome$league_id),]
+
+#creating identifier to merge game data to away team stats for that season
+leagueSplit$p2<-paste0(leagueSplit$season$seasonStart, leagueSplit$away_team_api_id)
+Team_Attributes$p2<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+#merging match data and away team data using method specified above
+matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=TRUE)
+matchTeamAttAway<-matchTeamAttAway[!is.na(matchTeamAttAway$league_id),]
+
+#380 team statistics are missing due to no stats on the team in that season for home team matches and 390 for away team matches. These are substancially smaller numbers than when not controlling for the month the stats were taken in, in those cases apporximately 700 values were missing. 
 ```
 
 
@@ -105,6 +156,7 @@ for (i in 1:nrow(leagueSplit)){
 ```{r}
 library(dplyr)
 #counting number of wins, loses, ties by team
+
 #homeTie
 homeTie<-leagueSplit %>%
   group_by(home_team_api_id, homeTie) %>%
@@ -226,16 +278,57 @@ plot_wins_home_freq
 
 
 ```{r}
-#splitting data into training, testing
+#splitting data into training. To 
 set.seed(1234)
-smp_size= floor(0.5* nrow(leagueSplit))
+smp_size= floor(0.7* nrow(leagueSplit))
 train_ind = sample(seq_len(nrow(leagueSplit)),size=smp_size)
 train<- leagueSplit[train_ind,]
 test<-leagueSplit[-train_ind,]
 
+
+
+#option for negating time series
+#clustering data by team and then splitting into training with previous seasons and test with latest season(2015/2016)
+#seperating out by each season to compare later. 
+#training is only previous 5 years 
+test<-leagueSplit[leagueSplit$season=="2015/2016",]
+train2014<-leagueSplit[leagueSplit$season=="2014/2015",]
+train2013<-leagueSplit[leagueSplit$season=="2013/2014",]
+train2012<-leagueSplit[leagueSplit$season=="2012/2013",]
+train2011<-leagueSplit[leagueSplit$season=="2011/2012",]
+train2010<-leagueSplit[leagueSplit$season=="2010/2011",]
+train<-rbind(train2014, train2013, train2012, train2011, train2010)
+table(train$home_team_api_id)
+
+#creating function to extract team attributes associated with a given game
+
+get_team_att<- function(team_api_id, year){
+  for(i in 1:length(Team_Attributes)){
+    if(Team_Attributes$team_api_id[i]==team_api_id){
+      team<-Team_Attributes[i,]
+    }
+  }
+}
+
+for(i in 1:length(Team_Attributes)){
+  if(Team_Attributes$team_api_id[i]=="9927"){
+    t1<-Team_Attributes[i,]
+  }
+}
+t1
+
+#logistic regression with cross validation 
+glm_fit<-glm()
+
+
+
+
+```
+
+```{r}
+
 #logistic regression on training data
-
-
+log_fit<-train()
 ```
 
 
