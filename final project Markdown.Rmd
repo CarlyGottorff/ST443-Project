@@ -95,105 +95,6 @@ for (i in 1:nrow(leagueSplit)){
 
 ```
 
-```{r}
-#extracting team attributes and matching to games
-require(reshape)
-library(dplyr)
-#creating season variable for teams to merge with games accurately. Because the season runs from 09-05. calculations done in 09 are for that years season start year, while calculations done in 02 are done for the previous years season start year.
-for (i in 1:length(Team_Attributes$date)){
-  if(substr(Team_Attributes$date[i],6,7)=="09"){
-    Team_Attributes$seasonStart[i]<-(substr(Team_Attributes$date[i],1,4))
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2016-02"){
-    Team_Attributes$seasonStart[i]<-"2015"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2015-02"){
-    Team_Attributes$seasonStart[i]<-"2014"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2014-02"){
-    Team_Attributes$seasonStart[i]<-"2013"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2013-02"){
-    Team_Attributes$seasonStart[i]<-"2012"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2012-02"){
-    Team_Attributes$seasonStart[i]<-"2011"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2011-02"){
-    Team_Attributes$seasonStart[i]<-"2010"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2010-02"){
-    Team_Attributes$seasonStart[i]<-"2009"
-  }
-  if(substr(Team_Attributes$date[i],1,7)=="2009-02"){
-    Team_Attributes$seasonStart[i]<-"2008"
-  }
-}
-
-#seperating season to get the start year in order to merge with team attributes
-for(i in 1:length(leagueSplit$season)){
-  leagueSplit$seasonStart[i]<-substr(leagueSplit$season[i],1,4)
-}
-
-#creating identifier to merge game data to home team stats for that season
-
-leagueSplit$p1<-paste0(leagueSplit$seasonStart, leagueSplit$home_team_api_id)
-Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
-
-
-#merging dfs and keeping all values to avoid ommitting any. !is.na is used to remove the values in merge that were caused by the p1 values from other leagues in Team_Attributes. By doing this we makes sure the exact same number of matches are being accounted for. This merge uses home team API. _Therefore the team stats bound to each game are for the home team. _
-matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE)
-#removing unnecessary columns 
-matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)]
-#renaming columns to merge
-colnames(matchTeamAttHome)[7]<-"matchDate"
-colnames(matchTeamAttHome)[16]<-"homeStatsTakenDate"
-colnames(matchTeamAttHome)[17:24]<-c("homeBuildUpPlaySpeed", "homeBuildUpPlayPassing", "homeChanceCreationPassing", "homeChanceCreationCrossing", "homeChanceCreationShooting", "homeDefencePressure", "homeDefenceAggression", "homeDefenceTeamWidth")
-
-#creating identifier to merge game data to away team stats for that season
-leagueSplit$p2<-paste0(leagueSplit$seasonStart, leagueSplit$away_team_api_id)
-Team_Attributes$p2<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
-#merging match data and away team data using method specified above
-matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=FALSE)
-#removing all unneccessary columns 
-matchTeamAttAway<- matchTeamAttAway[,-c(1:8,10:20,23:25,27,28,30,32,34,35,37,39,41,42,43,44)]
-#renaming columns 
-colnames(matchTeamAttAway)[2]<-"awayStatsTakenDate"
-colnames(matchTeamAttAway)[3:10]<-c("awayBuildUpPlaySpeed", "awayBuildUpPlayPassing", "awayChanceCreationPassing", "awayChanceCreationCrossing", "awayChanceCreationShooting", "awayDefencePressure", "awayDefenceAggression", "awayDefenceTeamWidth")
-
-#760 values missing from each set beacuse there are no stats on those teams in that year. no stats for the 2008/2009 season. No stats for teams taken before 2010. the first stats start in 02-2010, which are coded into the 2009/2010 season for the reason exlained above.
-
-#merging home and away 
-matchTeamAttHA<-merge(matchTeamAttHome, matchTeamAttAway, by="match_api_id")
-
-
-```
-
-
-```{r}
-#finding previous outcome of every match played for home team in match 
-
-#removing hours from date variable
-for(i in 1:length(leagueSplit$date)){
-  leagueSplit$date[i]<-substr(leagueSplit$date[i],1,10)
-}
-#converting to date
-leagueSplit$date<-as.Date(leagueSplit$date, format = "%Y-%m-%d")
-leagueSplit[order(leagueSplit$date),]
-
-for(i in 1:length(leagueSplit)){
-  for(j in 1:length(leagueSplit$home_team_api_id)){
-    if(leagueSplit$home_team_api_id[j] %in% leagueSplit$home_team_api_id[1:j-1]){
-      games<-leagueSplit[leagueSplit$home_team_api_id[j]==leagueSplit$home_team_api_id[1:j-1],]
-      leagueSplit$previousMatch[j]<-min(games$date)
-    }
-  }
-}
-
-min(leagueSplit[leagueSplit$home_team_api_id==leagueSplit$home_team_api_id,])
-
-
-```
 
 ```{r}
 library(dplyr)
@@ -311,17 +212,81 @@ plot_wins_home_freq
 
 
 ```{r}
-#splitting into training and testing 
-#using last season in set (2015-2016) as the testing dataset, while all matches before the 2015-2016 season are in traiing
-test<-matchTeamAttHA[matchTeamAttHA$seasonStart.x==2015,]
-train<-matchTeamAttHA[matchTeamAttHA$seasonStart.x<2015,]
+#extracting team attributes and matching to games
+require(reshape)
+library(dplyr)
+#creating season variable for teams to merge with games accurately. Because the season runs from 09-05. calculations done in 09 are for that years season start year, while calculations done in 02 are done for the previous years season start year.
+for (i in 1:length(Team_Attributes$date)){
+  if(substr(Team_Attributes$date[i],6,7)=="09"){
+    Team_Attributes$seasonStart[i]<-(substr(Team_Attributes$date[i],1,4))
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2016-02"){
+    Team_Attributes$seasonStart[i]<-"2015"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2015-02"){
+    Team_Attributes$seasonStart[i]<-"2014"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2014-02"){
+    Team_Attributes$seasonStart[i]<-"2013"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2013-02"){
+    Team_Attributes$seasonStart[i]<-"2012"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2012-02"){
+    Team_Attributes$seasonStart[i]<-"2011"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2011-02"){
+    Team_Attributes$seasonStart[i]<-"2010"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2010-02"){
+    Team_Attributes$seasonStart[i]<-"2009"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2009-02"){
+    Team_Attributes$seasonStart[i]<-"2008"
+  }
+}
 
+
+#seperating season to get the start year in order to merge with team attributes
+for(i in 1:length(leagueSplit$season)){
+  leagueSplit$seasonStart[i]<-substr(leagueSplit$season[i],1,4)
+}
+
+#creating identifier to merge game data to home team stats for that season
+
+leagueSplit$p1<-paste0(leagueSplit$seasonStart, leagueSplit$home_team_api_id)
+Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+
+
+#merging dfs and keeping all values to avoid ommitting any. !is.na is used to remove the values in merge that were caused by the p1 values from other leagues in Team_Attributes. By doing this we makes sure the exact same number of matches are being accounted for. This merge uses home team API. _Therefore the team stats bound to each game are for the home team. _
+matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE)
+#removing unnecessary columns 
+matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)]
+#renaming columns to merge
+colnames(matchTeamAttHome)[7]<-"matchDate"
+colnames(matchTeamAttHome)[16]<-"homeStatsTakenDate"
+colnames(matchTeamAttHome)[17:24]<-c("homeBuildUpPlaySpeed", "homeBuildUpPlayPassing", "homeChanceCreationPassing", "homeChanceCreationCrossing", "homeChanceCreationShooting", "homeDefencePressure", "homeDefenceAggression", "homeDefenceTeamWidth")
+
+#creating identifier to merge game data to away team stats for that season
+leagueSplit$p2<-paste0(leagueSplit$seasonStart, leagueSplit$away_team_api_id)
+Team_Attributes$p2<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+#merging match data and away team data using method specified above
+matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=FALSE)
+#removing all unneccessary columns 
+matchTeamAttAway<- matchTeamAttAway[,-c(1:8,10:20,23:25,27,28,30,32,34,35,37,39,41,42,43,44)]
+#renaming columns 
+colnames(matchTeamAttAway)[2]<-"awayStatsTakenDate"
+colnames(matchTeamAttAway)[3:10]<-c("awayBuildUpPlaySpeed", "awayBuildUpPlayPassing", "awayChanceCreationPassing", "awayChanceCreationCrossing", "awayChanceCreationShooting", "awayDefencePressure", "awayDefenceAggression", "awayDefenceTeamWidth")
+
+#760 values missing from each set beacuse there are no stats on those teams in that year. no stats for the 2008/2009 season. No stats for teams taken before 2010. the first stats start in 02-2010, which are coded into the 2009/2010 season for the reason exlained above.
+
+#merging home and away 
+matchTeamAttHA<-merge(matchTeamAttHome, matchTeamAttAway, by="match_api_id")
 ```
 
 
 ```{r}
 # fit a gernalized linear regression using a logit link function, set distribution of the response variable to be binomial
-matchTeamAttHA$homeWin<- as.factor(matchTeamAttHA$homeWin)
 glm_fit = glm(homeWin ~ homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+ homeChanceCreationPassing+ homeChanceCreationCrossing+ homeChanceCreationShooting+ homeDefencePressure+ homeDefenceAggression+ homeDefenceTeamWidth+awayBuildUpPlaySpeed+ awayBuildUpPlayPassing+awayChanceCreationPassing+ awayChanceCreationCrossing+ awayChanceCreationShooting+ awayDefencePressure+ awayDefenceAggression+ awayDefenceTeamWidth,
               data = matchTeamAttHA,
               family = binomial)
@@ -334,14 +299,70 @@ glm_pred[glm_probs > .5] = "Win"
 table(glm_pred, matchTeamAttHA$homeWin)
 (906 + 462) / 1900
 
+#splitting into training and testing 
+#using last season in set (2015-2016) as the testing dataset, while all matches before the 2015-2016 season are in traiing
+test<-matchTeamAttHA[matchTeamAttHA$seasonStart.x==2015,]
+train<-matchTeamAttHA[matchTeamAttHA$seasonStart.x<2015,]
+#testing dataset for Y
+test_win<-test$homeWin
 
 #using training dataset 
-train$home
 glm_fit = glm(homeWin ~ homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+ homeChanceCreationPassing+ homeChanceCreationCrossing+ homeChanceCreationShooting+ homeDefencePressure+ homeDefenceAggression+ homeDefenceTeamWidth+awayBuildUpPlaySpeed+ awayBuildUpPlayPassing+awayChanceCreationPassing+ awayChanceCreationCrossing+ awayChanceCreationShooting+ awayDefencePressure+ awayDefenceAggression+ awayDefenceTeamWidth,
               data = train,
               family = binomial)
 summary(glm_fit)
 
+# Predicted probabilities for the testing data set
+glm_probs = predict(glm_fit, test, type = "response")
+
+# Sample size for the testing data
+dim(test)
+
+# For predicted probabilities greater than 0.5, assign Y to be "Win"; otherwise assign Y to be "Lose"
+glm_pred = rep("Down", 380)
+glm_pred[glm_probs > .5] = "Win"
+
+
+# Confusion matrix
+table(glm_pred, test_win)
+# Misclassfication error rate
+(glm_pred==test_win) ###???????????????????????????
+
+#not done 
+
 ```
 
+```{r}
+#cross validation 
+attach(Auto)
+# Randomly split the full data into half training and half testing
+set.seed(1234)
+train = sample(x = 2280, size = 1140)
 
+#not done 
+```
+
+```{r}
+#finding previous outcome of every match played for home team in match 
+
+#removing hours from date variable
+for(i in 1:length(leagueSplit$date)){
+  leagueSplit$date[i]<-substr(leagueSplit$date[i],1,10)
+}
+#converting to date
+leagueSplit$date<-as.Date(leagueSplit$date, format = "%Y-%m-%d")
+leagueSplit[order(leagueSplit$date),]
+
+for(i in 1:length(leagueSplit)){
+  for(j in 1:length(leagueSplit$home_team_api_id)){
+    if(leagueSplit$home_team_api_id[j] %in% leagueSplit$home_team_api_id[1:j-1]){
+      games<-leagueSplit[leagueSplit$home_team_api_id[j]==leagueSplit$home_team_api_id[1:j-1],]
+      leagueSplit$previousMatch[j]<-min(games$date)
+    }
+  }
+}
+
+min(leagueSplit[leagueSplit$home_team_api_id==leagueSplit$home_team_api_id,])
+
+#not done 
+```
