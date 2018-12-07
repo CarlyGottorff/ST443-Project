@@ -209,8 +209,6 @@ plot_wins_home_freq <-
 plot_wins_home_freq
 
 
-
-
 ```
 
 
@@ -307,9 +305,9 @@ matchTeamAttHA$homeOutcome<-as.factor(matchTeamAttHA$homeOutcome)
 
 ```{r}
 
-#splitting into training and testing randomly with %80 in training and 20% in testing 
+#splitting into training and testing randomly with %85 in training and 15% in testing 
 set.seed(123)
-sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.80*nrow(matchTeamAttHA)), replace = F)
+sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.85*nrow(matchTeamAttHA)), replace = F)
 train<- matchTeamAttHA[sample, ]
 test<- matchTeamAttHA[-sample, ]
 
@@ -318,6 +316,7 @@ train<-train[,-c(1:9,11:16, 25)]
 test<-test[,-c(1:9,11:16,25)]
 
 ```
+
 
 ```{r}
 library(glmnet)
@@ -373,48 +372,22 @@ fit.lasso.pred.logit<-predict(fit.lasso.best.logit, testX, type="class")
 sum(fit.lasso.pred.logit=testY)/length(testY)
 
 
-#the logistic regression for all 3 categories is better at predicting the outcome.
-```
-
-```{r}
-#using splines for binomial 
-library(splines)
-
-fit <- lm(wage ~ bs(age, knots = c(25, 40, 60)), data = Wage)
-pred <- predict(fit, newdata = list(age = age.grid), se.fit = TRUE)
-plot(age, wage, col = "grey")
-lines(age.grid, pred$fit, lwd = 2)
-lines(age.grid, pred$fit + 2 * pred$se, lty = "dashed")
-lines(age.grid, pred$fit - 2 * pred$se, lty = "dashed")
-
-
+#the logistic regression for all 3 categories is better at predicting the outcome. Therefore we will continue to use the 3 factor level data for win, loose, tie for the rest of our models. 
 ```
 
 
-```{r}
-#support Vector Machine with radial kernel
-library(e1071)
 
-svmfit<-svm(homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, kernel = "radial", cost=2, scale=FALSE)
-
-tune.out<-tune(svm, homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth,data=train, kernal="radial", ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
-summary(tune.out)
-bestmod = tune.out$best.model
-summary(bestmod)
-ypred = predict(bestmod, test)
-table(predict = ypred, truth = test$homeOutcome)
-(34+4+176)/456
-
-```
 
 ```{r}
-#support vector machine using repeating k-fold at 10 for categorical Y at 3 levels 
+#support vector machine using repeating cv at 10 folds for categorical homeOutcome at 3 levels 
 
 library(caret)
 library(kernlab)
+X<-train[,-1]
+
 trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
  
-svm_Radial <- train(homeOutcome~.-1, data=train, method = "svmRadial",trControl=trctrl, preProcess = c("center", "scale"), tuneLength = 10)
+svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl, preProcess = c("center", "scale"))
 
 plot(svm_Radial)
 
@@ -432,64 +405,9 @@ svm_Radial_Grid<- train(homeOutcome ~.-1, data = train, method = "svmRadial",
 svm_Radial_Grid
 
 ```
-```{r}
-#Support vector machine for binomial categorical data using repeated CV
-
-trctrlB <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
- 
-svm_RadialB <- train(homeWin~.-18, data=train, method = "svmRadial", trControl=trctrlB, preProcess = c("center", "scale"), tuneLength = 10)
-class(train$homeWin)
-svm_Linear
-
-test_SVM_pred<-predict(svm_Linear, newdata=test)
-test_SVM_pred
-
-confusionMatrix(test_SVM_pred, test$homeOutcome)
-
-#notdone
-
-```
-
 
 ```{r}
-#multinomial logistic regression and repeated CV
-trctrl_logitB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
- 
-multiLogit <- train(homeOutcome~.-1, data=train, method = "multinom", trControl=trctrl)
-
-multiLogit_pred<-predict(multiLogit, newdata=test)
-confusionMatrix(multiLogit_pred, test$homeOutcome)
-```
-
-```{r}
-#binomial logistic regression with binary calsifier homeWin and repeat CV
-train$homeWin<-as.factor(train$homeWin)
-test$homeWin<-as.factor(test$homeWin)
-
-trctrl_logitB<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary)
-#train
-logitB<-train(homeWin~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, method="glm", family=binomial(), trControl=trctrl)
-#variable importance
-varImp(logit)
-#predict
-logit_pred<-predict(logit,test)
-#confusion Matrix
-confusionMatrix(logit_pred, test$homeWin)
-```
-
-```{r}
-#boosting 
-
-
-```
-
-```{r}
-#bagging
-
-```
-
-```{r}
-#k nearest neighbors 
+#k nearest neighbors using repeating CV at 10 folds with 3 level factor dependent variable win, lose, tie. 
 X<-train[,-1]
 
 trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
@@ -498,6 +416,7 @@ trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, preProcess=c("center","scale"), tuneLength=10)
 knn_fit
 plot(knn_fit)
+varImp(knn_fit)
 
 #prediction 
 knn_pred<-predict(knn_fit, newdata=test)
@@ -505,8 +424,9 @@ knn_pred<-predict(knn_fit, newdata=test)
 #confusion Matrix
 confusionMatrix(knn_pred, test$homeOutcome)
 ```
+
 ```{r}
-#Linear discriminant analysis 
+#Linear discriminant analysis with repeated CV at 10 folds 
 require(MASS)
 X<-train[,-1]
 
@@ -524,6 +444,7 @@ confusionMatrix(lda_pred, test$homeOutcome)
 
 
 ```
+
 ```{r}
 #quadratic discriminant analysis 
 
@@ -547,11 +468,12 @@ confusionMatrix(qda_pred, test$homeOutcome)
 
 X<-train[,-1]
 
-trctrl_tree<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+trctrl_tree<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
 
 #training
-tree_fit<-train(homeOutcome~., data=X, method="rpart", trControl=trctrl_rf)
+tree_fit<-train(homeOutcome~., data=X, method="rpart", trControl=trctrl_tree)
 tree_fit
+varImp(tree_fit)
 
 #prediction 
 tree_pred<-predict(tree_fit, newdata=test)
@@ -566,17 +488,16 @@ rpart.plot(tree_fit$finalModel)
 
 ```{r}
 #random forest 
-require(ranger)
-require(dplyr)
 require(e1071)
-require(caret)
+require(randomForest)
+
 X<-train[,-1]
 
 trctrl_rf<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
-rf_fit<-train(homeOutcome~., data=X, method="ranger", trControl=trctrl_rf)
-rf_fit
+rf_fit<-train(homeOutcome~., data=X, method="rf", trControl=trctrl_rf)
+varImp(rf_fit)
 
 #prediction 
 rf_pred<-predict(rf_fit, newdata=test)
@@ -586,3 +507,27 @@ confusionMatrix(rf_pred, test$homeOutcome)
 
 
 ```
+
+
+```{r}
+#Boosting 
+require(gbm)
+
+X<-train[,-1]
+
+trctrl_rfBoost<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rfBoost_fit<-train(homeOutcome~., data=X, method="gbm", trControl=trctrl_rfBoost)
+
+#prediction 
+rfBoost_pred<-predict(rfBoost_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rfBoost_pred, test$homeOutcome)
+
+
+
+```
+
+
