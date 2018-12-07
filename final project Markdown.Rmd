@@ -208,6 +208,9 @@ plot_wins_home_freq <-
   ggplot(gamesPlayedAH,aes(percWinHomeTot))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
 plot_wins_home_freq
 
+
+
+
 ```
 
 
@@ -303,87 +306,221 @@ matchTeamAttHA$homeOutcome<-as.factor(matchTeamAttHA$homeOutcome)
 
 
 ```{r}
-library(nnet)
-library(glmnet)
-library(caret)
-#splitting into training and testing randomly with %70 in training and 30% in testing 
+
+#splitting into training and testing randomly with %80 in training and 20% in testing 
 set.seed(123)
-sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.70*nrow(matchTeamAttHA)), replace = F)
+sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.80*nrow(matchTeamAttHA)), replace = F)
 train<- matchTeamAttHA[sample, ]
 test<- matchTeamAttHA[-sample, ]
 
 #removing extra columns, leaving only y and X
 train<-train[,-c(1:9,11:16, 25)]
 test<-test[,-c(1:9,11:16,25)]
-#multinomial logistic regression with lasso 
+
+```
+
+```{r}
+library(glmnet)
+#multinomial logistic regression with lasso and CV
 #converting from df to matrix 
-X<-as.matrix(train[,-17])
-Y<-train[,17]
-testX<-as.matrix(test[,-17])
+X<-as.matrix(train[,-c(1,18)])
+Y<-train[,18]
+testX<-as.matrix(test[,-c(1,18)])
+testY<-test[,18]
 
-fit.lasso.cv<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="multinomial")
+glmmod.multiLogit<-glmnet(X,Y,alpha = 1, family="multinomial")
+plot(glmmod.multiLogit,xvar = "lambda", label = TRUE)
+plot(glmmod.multiLogit,xvar = "dev", label = TRUE)
 
-fit.lasso.best<-glmnet(X,Y,family = "multinomial", alpha=1, lambda=fit.lasso.cv$lambda.min)
+fit.lasso.cv.multiLogit<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="multinomial")
+plot(fit.lasso.cv.multiLogit)
 
-fit.lasso.pred<-predict(fit.lasso.best, testX, type="response")
+fit.lasso.best.multiLogit<-glmnet(X,Y,family = "multinomial", alpha=1, lambda=fit.lasso.cv.multiLogit$lambda.min)
 
-predicted <- colnames(fit.lasso.pred)[apply(fit.lasso.pred,0,which.max)]
-predicted
-table(predicted, test[,17])
-(31+288)/648
+fit.lasso.pred.multiLogit<-predict(fit.lasso.best.multiLogit, testX, type="response")
+fit.lasso.pred.multiLogit
+
+predicted.multiLogit <- colnames(fit.lasso.pred.multiLogit)[apply(fit.lasso.pred.multiLogit,1,which.max)]
+table(predicted.multiLogit, test[,18])
+
+#justification for use of Lasso rather than ridge
+foldid=sample(1:10,size=length(Y),replace=TRUE)
+cv1=cv.glmnet(X,Y,foldid = foldid, alpha=1, family="multinomial" )
+cv.5=cv.glmnet(X,Y,foldid = foldid, alpha=.5, family="multinomial")
+cv0=cv.glmnet(X,Y,foldid = foldid, alpha=0, family="multinomial")
+plot(cv1);plot(cv.5);plot(cv0)
+plot(log(cv1$lambda),cv1$cvm,pch=19,col="red",xlab="log(Lambda)",ylab=cv1$name)
+points(log(cv.5$lambda),cv.5$cvm,pch=19,col="grey")
+points(log(cv0$lambda),cv0$cvm,pch=19,col="blue")
+legend("topleft",legend=c("alpha= 1","alpha= .5","alpha 0"),pch=19,col=c("red","grey","blue"))
 
 ```
+
 ```{r}
+#running Binomial logistic regression on outcome of home win (1,0)
 
-# fit a gernalized linear regression using a logit link function, set distribution of the response variable to be binomial
-glm.fit.lasso = glm(Y ~ X,
-              data = train, 
-              family = binomial)
-glm_probs = predict(glm_fit, type = "response")
-glm_pred = rep("Lose", 2280)
-# For predicted probabilities greater than 0.5, assign Y to be "Win" otherwise assign Y to be "Lose"
-glm_pred[glm_probs > .5] = "Win"
-# Confusion matrix
-table(glm_pred, matchTeamAttHA$homeWin)
-(47 + 1003) / 1140
+X<-as.matrix(train[,-c(1,18)])
+Y<-train[,1]
+testX<-as.matrix(test[,-c(1,18)])
+testY<-test[,1]
 
+fit.lasso.cv.logit<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="binomial")
+
+fit.lasso.best.logit<-glmnet(X,Y,family = "binomial", alpha=1, lambda=fit.lasso.cv.logit$lambda.min)
+
+fit.lasso.pred.logit<-predict(fit.lasso.best.logit, testX, type="class")
+
+sum(fit.lasso.pred.logit=testY)/length(testY)
+
+
+#the logistic regression for all 3 categories is better at predicting the outcome.
+```
+
+```{r}
+#using splines for binomial 
+library(splines)
+
+fit <- lm(wage ~ bs(age, knots = c(25, 40, 60)), data = Wage)
+pred <- predict(fit, newdata = list(age = age.grid), se.fit = TRUE)
+plot(age, wage, col = "grey")
+lines(age.grid, pred$fit, lwd = 2)
+lines(age.grid, pred$fit + 2 * pred$se, lty = "dashed")
+lines(age.grid, pred$fit - 2 * pred$se, lty = "dashed")
 
 
 ```
 
+
 ```{r}
-#support Vector Machine 
+#support Vector Machine with radial kernel
 library(e1071)
 
-svmfit<-svm(homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, kernel = "linear", cost=2, scale=FALSE)
+svmfit<-svm(homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, kernel = "radial", cost=2, scale=FALSE)
 
-tune.out<-tune(svm, homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth,data=train, kernal="linear", ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+tune.out<-tune(svm, homeOutcome~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth,data=train, kernal="radial", ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
 summary(tune.out)
 bestmod = tune.out$best.model
 summary(bestmod)
 ypred = predict(bestmod, test)
 table(predict = ypred, truth = test$homeOutcome)
-(57+4+267)/684
+(34+4+176)/456
+
+```
+
+```{r}
+#support vector machine using repeating k-fold at 10 for categorical Y at 3 levels 
+
+library(caret)
+library(kernlab)
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+ 
+svm_Radial <- train(homeOutcome~.-1, data=train, method = "svmRadial",trControl=trctrl, preProcess = c("center", "scale"), tuneLength = 10)
+
+plot(svm_Radial)
+
+test_SVM_pred<-predict(svm_Radial, newdata=test)
+confusionMatrix(test_SVM_pred, test$homeOutcome)
+
+#customizing grid
+grid_radial<- expand.grid(sigma = .01,
+ C = c(0.05,0.1,0.25))
+svm_Radial_Grid<- train(homeOutcome ~.-1, data = train, method = "svmRadial",
+                    trControl=trctrl,
+                    preProcess = c("center","scale"),
+                    tuneGrid = grid_radial,
+                    tuneLength = 10)
+svm_Radial_Grid
+
+```
+```{r}
+#Support vector machine for binomial categorical data using repeated CV
+
+trctrlB <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+ 
+svm_RadialB <- train(homeWin~.-18, data=train, method = "svmRadial", trControl=trctrlB, preProcess = c("center", "scale"), tuneLength = 10)
+class(train$homeWin)
+svm_Linear
+
+test_SVM_pred<-predict(svm_Linear, newdata=test)
+test_SVM_pred
+
+confusionMatrix(test_SVM_pred, test$homeOutcome)
+
+#notdone
+
+```
 
 
+```{r}
+#multinomial logistic regression and repeated CV
+trctrl_logitB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+ 
+multiLogit <- train(homeOutcome~.-1, data=train, method = "multinom", trControl=trctrl)
 
+multiLogit_pred<-predict(multiLogit, newdata=test)
+confusionMatrix(multiLogit_pred, test$homeOutcome)
+```
 
+```{r}
+#binomial logistic regression with binary calsifier homeWin and repeat CV
+train$homeWin<-as.factor(train$homeWin)
+test$homeWin<-as.factor(test$homeWin)
 
-#binomial
+trctrl_logitB<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE, summaryFunction = twoClassSummary)
+#train
+logitB<-train(homeWin~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, method="glm", family=binomial(), trControl=trctrl)
+#variable importance
+varImp(logit)
+#predict
+logit_pred<-predict(logit,test)
+#confusion Matrix
+confusionMatrix(logit_pred, test$homeWin)
+```
 
-
-svfmfitB<-svm(homeWin~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth, data=train, kernel = "linear", cost=1, scale=FALSE)
-
-plot(svmfit, train)
-
-tune.outB<-tune(svm, homeWin~homeBuildUpPlaySpeed+ homeBuildUpPlayPassing+homeChanceCreationPassing+homeChanceCreationCrossing+homeChanceCreationShooting+ homeDefencePressure+homeDefenceAggression+homeDefenceTeamWidth+awayBuildUpPlaySpeed+awayBuildUpPlayPassing+awayChanceCreationPassing+awayChanceCreationCrossing+awayChanceCreationShooting+awayDefencePressure+awayDefenceAggression+awayDefenceTeamWidth,data=train, kernal="linear", ranges=list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
-summary(tune.outB)
-bestmodB = tune.outB$best.model
-summary(bestmodB)
-ypredB = predict(bestmodB, test)
-table(predict = ypredB, truth = test$homeWin)
+```{r}
+#boosting 
 
 
 ```
 
+```{r}
+#bagging
+
+```
+
+```{r}
+#k nearest neighbors 
+X<-train[,-1]
+
+trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, preProcess=c("center","scale"), tuneLength=10)
+knn_fit
+plot(knn_fit)
+
+#prediction 
+knn_pred<-predict(knn_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(knn_pred, test$homeOutcome)
+```
+```{r}
+#Linear discriminant analysis 
+X<-train[,-1]
+
+trctrl_lda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+lda_fit<-train(homeOutcome~., data=X, method="lda", trControl=trctrl_lda, preProcess = c("center", "scale"))
+lda_fit
+
+#prediction 
+lda_pred<-predict(lda_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(lda_pred, test$homeOutcome)
+
+
+```
 
