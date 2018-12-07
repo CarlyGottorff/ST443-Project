@@ -32,8 +32,6 @@ leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id,
            FROM Match 
            WHERE league_id='1729' ")
 
-#B365H, B365A, B365D, BWH, BWA, BWD, IwA, IWH, IWD, LBH, LBA, LBD, PSH, PSD, PSA, WHA,WHH, WHD, SJA,SJD,SJH, VCA,VCH,VCD,GBA, GBH, GBD, BSH, BSA, BSD
-
 #counting number of away matches for each team with long name
 gamesPlayedAway<-dbGetQuery(db, "SELECT away_team_api_id, team_long_name, COUNT(away_team_api_id)
            FROM Match JOIN Team
@@ -385,9 +383,9 @@ library(caret)
 library(kernlab)
 X<-train[,-1]
 
-trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+trctrl_svm <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
  
-svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl, preProcess = c("center", "scale"))
+svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl_svm, preProcess = c("center", "scale"))
 
 plot(svm_Radial)
 
@@ -397,11 +395,10 @@ confusionMatrix(test_SVM_pred, test$homeOutcome)
 #customizing grid
 grid_radial<- expand.grid(sigma = .01,
  C = c(0.05,0.1,0.25))
-svm_Radial_Grid<- train(homeOutcome ~.-1, data = train, method = "svmRadial",
-                    trControl=trctrl,
+svm_Radial_Grid<- train(homeOutcome ~., data = X, method = "svmRadial",
+                    trControl=trctrl_svm,
                     preProcess = c("center","scale"),
-                    tuneGrid = grid_radial,
-                    tuneLength = 10)
+                    tuneGrid = grid_radial)
 svm_Radial_Grid
 
 ```
@@ -413,7 +410,7 @@ X<-train[,-1]
 trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
-knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, preProcess=c("center","scale"), tuneLength=10)
+knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, preProcess=c("center","scale"))
 knn_fit
 plot(knn_fit)
 varImp(knn_fit)
@@ -423,6 +420,7 @@ knn_pred<-predict(knn_fit, newdata=test)
 
 #confusion Matrix
 confusionMatrix(knn_pred, test$homeOutcome)
+
 ```
 
 ```{r}
@@ -453,8 +451,7 @@ X<-train[,-1]
 trctrl_qda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
-qda_fit<-train(homeOutcome~., data=X, method="qda", trControl=trctrl_lda, preProcess = c("center", "scale"))
-lda_fit
+qda_fit<-train(homeOutcome~., data=X, method="qda", trControl=trctrl_qda, preProcess = c("center", "scale"))
 
 #prediction 
 qda_pred<-predict(qda_fit, newdata=test)
