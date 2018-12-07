@@ -507,6 +507,7 @@ confusionMatrix(knn_pred, test$homeOutcome)
 ```
 ```{r}
 #Linear discriminant analysis 
+require(MASS)
 X<-train[,-1]
 
 trctrl_lda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
@@ -523,4 +524,65 @@ confusionMatrix(lda_pred, test$homeOutcome)
 
 
 ```
+```{r}
+#quadratic discriminant analysis 
 
+X<-train[,-1]
+
+trctrl_qda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+qda_fit<-train(homeOutcome~., data=X, method="qda", trControl=trctrl_lda, preProcess = c("center", "scale"))
+lda_fit
+
+#prediction 
+qda_pred<-predict(qda_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(qda_pred, test$homeOutcome)
+```
+
+```{r}
+#decision tree 
+
+X<-train[,-1]
+
+trctrl_tree<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+tree_fit<-train(homeOutcome~., data=X, method="rpart", trControl=trctrl_rf)
+tree_fit
+
+#prediction 
+tree_pred<-predict(tree_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(tree_pred, test$homeOutcome)
+
+library(rpart.plot)
+rpart.plot(tree_fit$finalModel)
+```
+
+
+```{r}
+#random forest 
+require(ranger)
+require(dplyr)
+require(e1071)
+require(caret)
+X<-train[,-1]
+
+trctrl_rf<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rf_fit<-train(homeOutcome~., data=X, method="ranger", trControl=trctrl_rf)
+rf_fit
+
+#prediction 
+rf_pred<-predict(rf_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rf_pred, test$homeOutcome)
+
+
+```
