@@ -465,6 +465,7 @@ confusionMatrix(qda_pred, test$homeOutcome)
 
 ```{r}
 #decision tree 
+library(rpart.plot)
 
 X<-train[,-1]
 
@@ -481,7 +482,7 @@ tree_pred<-predict(tree_fit, newdata=test)
 #confusion Matrix
 confusionMatrix(tree_pred, test$homeOutcome)
 
-library(rpart.plot)
+#plot
 rpart.plot(tree_fit$finalModel)
 ```
 
