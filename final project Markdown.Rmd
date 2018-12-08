@@ -304,7 +304,7 @@ matchTeamAttHA$homeOutcome<-as.factor(matchTeamAttHA$homeOutcome)
 ```{r}
 
 #splitting into training and testing randomly with %85 in training and 15% in testing 
-set.seed(123)
+set.seed(88)
 sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.85*nrow(matchTeamAttHA)), replace = F)
 train<- matchTeamAttHA[sample, ]
 test<- matchTeamAttHA[-sample, ]
@@ -312,6 +312,27 @@ test<- matchTeamAttHA[-sample, ]
 #removing extra columns, leaving only y and X
 train<-train[,-c(1:9,11:16, 25)]
 test<-test[,-c(1:9,11:16,25)]
+
+```
+
+```{r}
+#box plots 
+plot(train$homeOutcome, train$homeBuildUpPlaySpeed)
+plot(train$homeOutcome, train$homeBuildUpPlayPassing)
+plot(train$homeOutcome, train$homeChanceCreationPassing)
+plot(train$homeOutcome, train$homeChanceCreationCrossing)
+plot(train$homeOutcome, train$homeChanceCreationShooting)
+plot(train$homeOutcome, train$homeDefencePressure)
+plot(train$homeOutcome, train$homeDefenceAggression)
+plot(train$homeOutcome, train$homeDefenceTeamWidth)
+plot(train$homeOutcome, train$awayBuildUpPlaySpeed)
+plot(train$homeOutcome, train$awayBuildUpPlayPassing)
+plot(train$homeOutcome, train$awayChanceCreationPassing)
+plot(train$homeOutcome, train$awayChanceCreationCrossing)
+plot(train$homeOutcome, train$awayChanceCreationShooting)
+plot(train$homeOutcome, train$awayDefencePressure)
+plot(train$homeOutcome, train$awayDefenceAggression)
+plot(train$homeOutcome, train$awayDefenceTeamWidth)
 
 ```
 
@@ -338,7 +359,10 @@ fit.lasso.pred.multiLogit<-predict(fit.lasso.best.multiLogit, testX, type="respo
 fit.lasso.pred.multiLogit
 
 predicted.multiLogit <- colnames(fit.lasso.pred.multiLogit)[apply(fit.lasso.pred.multiLogit,1,which.max)]
-table(predicted.multiLogit, test[,18])
+confusionMatrix_logit<-table(predicted.multiLogit, test[,18])
+confusionMatrix_logit
+accuracy<-(confusionMatrix_logit[1,1]+confusionMatrix_logit[2,2]+confusionMatrix_logit[3,3])/NROW(test)
+accuracy
 
 #justification for use of Lasso rather than ridge
 foldid=sample(1:10,size=length(Y),replace=TRUE)
@@ -373,9 +397,6 @@ sum(fit.lasso.pred.logit=testY)/length(testY)
 #the logistic regression for all 3 categories is better at predicting the outcome. Therefore we will continue to use the 3 factor level data for win, loose, tie for the rest of our models. 
 ```
 
-
-
-
 ```{r}
 #support vector machine using repeating cv at 10 folds for categorical homeOutcome at 3 levels 
 
@@ -388,6 +409,7 @@ trctrl_svm <- trainControl(method = "repeatedcv", number = 10, repeats = 3, clas
 svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl_svm, preProcess = c("center", "scale"))
 
 plot(svm_Radial)
+varImp(svm_Radial)
 
 test_SVM_pred<-predict(svm_Radial, newdata=test)
 confusionMatrix(test_SVM_pred, test$homeOutcome)
@@ -406,6 +428,7 @@ svm_Radial_Grid
 ```{r}
 #k nearest neighbors using repeating CV at 10 folds with 3 level factor dependent variable win, lose, tie. 
 X<-train[,-1]
+set.seed(123)
 
 trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
