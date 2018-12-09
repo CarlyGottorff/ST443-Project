@@ -256,8 +256,7 @@ for(i in 1:length(leagueSplit$season)){
 leagueSplit$p1<-paste0(leagueSplit$seasonStart, leagueSplit$home_team_api_id)
 Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
 
-
-#merging dfs and keeping all values to avoid ommitting any. !is.na is used to remove the values in merge that were caused by the p1 values from other leagues in Team_Attributes. By doing this we makes sure the exact same number of matches are being accounted for. This merge uses home team API. _Therefore the team stats bound to each game are for the home team. _
+#merging 
 matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE)
 #removing unnecessary columns 
 matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)]
@@ -387,14 +386,14 @@ testY<-test[,1]
 
 fit.lasso.cv.logit<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="binomial")
 
+#training
 fit.lasso.best.logit<-glmnet(X,Y,family = "binomial", alpha=1, lambda=fit.lasso.cv.logit$lambda.min)
 
+#testing
 fit.lasso.pred.logit<-predict(fit.lasso.best.logit, testX, type="class")
 
+#accuracy
 sum(fit.lasso.pred.logit=testY)/length(testY)
-
-
-#the logistic regression for all 3 categories is better at predicting the outcome. Therefore we will continue to use the 3 factor level data for win, loose, tie for the rest of our models. 
 ```
 
 ```{r}
@@ -406,34 +405,63 @@ X<-train[,-1]
 
 trctrl_svm <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
  
+#training
 svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl_svm, preProcess = c("center", "scale"))
-
+svm_Radial
 plot(svm_Radial)
 varImp(svm_Radial)
 
+#testing
 test_SVM_pred<-predict(svm_Radial, newdata=test)
 confusionMatrix(test_SVM_pred, test$homeOutcome)
+```
+```{r}
+#SVM for binomial outcome variable 
+#creating homeWin into a proper factor variable for SVM
+XB<-train[,-18]
+for(i in 1:length(XB$homeWin)){
+  if (XB$homeWin[i]==1){
+    XB$homeWin[i]<-"Win"
+  }
+  if(XB$homeWin[i]==0){
+    XB$homeWin[i]<-"Lose"
+  }
+}
+XB$homeWin<-as.factor(XB$homeWin)
 
-#customizing grid
-grid_radial<- expand.grid(sigma = .01,
- C = c(0.05,0.1,0.25))
-svm_Radial_Grid<- train(homeOutcome ~., data = X, method = "svmRadial",
-                    trControl=trctrl_svm,
-                    preProcess = c("center","scale"),
-                    tuneGrid = grid_radial)
-svm_Radial_Grid
+#making test homeWin into proper factor variable 
+for(i in 1:length(test$homeWin)){
+  if (test$homeWin[i]==1){
+    test$homeWin[i]<-"Win"
+  }
+  if(test$homeWin[i]==0){
+    test$homeWin[i]<-"Lose"
+  }
+}
+test$homeWin<-as.factor(test$homeWin)
+
+trctrl_svmB <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+ 
+#training 
+svm_RadialB <- train(homeWin~., data=XB, method = "svmRadial",trControl=trctrl_svmB, preProcess = c("center", "scale"))
+svm_RadialB
+plot(svm_RadialB)
+varImp(svm_RadialB)
+
+#testing
+test_SVM_predB<-predict(svm_RadialB, newdata=test)
+
+confusionMatrix(test_SVM_predB, test$homeWin)
 
 ```
 
 ```{r}
 #k nearest neighbors using repeating CV at 10 folds with 3 level factor dependent variable win, lose, tie. 
-X<-train[,-1]
-set.seed(123)
 
 trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
-knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, preProcess=c("center","scale"))
+knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, tuneGrid= expand.grid(k = 1:10), preProcess=c("center","scale"))
 knn_fit
 plot(knn_fit)
 varImp(knn_fit)
@@ -447,15 +475,35 @@ confusionMatrix(knn_pred, test$homeOutcome)
 ```
 
 ```{r}
-#Linear discriminant analysis with repeated CV at 10 folds 
+#k nearest neighbors using repeating CV at 10 folds with 2 level factor dependent variable win, lose, tie. 
+
+trctrl_knnB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+knn_fitB<-train(homeWin~., data=XB, method="knn", trControl=trctrl_knnB, tuneGrid= expand.grid(k = 1:10), preProcess=c("center","scale"))
+knn_fitB
+plot(knn_fitB)
+varImp(knn_fitB)
+
+#prediction 
+knn_predB<-predict(knn_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(knn_predB, test$homeWin)
+
+```
+
+
+```{r}
+#Linear discriminant analysis with repeated CV at 10 folds for 3 level factor 
 require(MASS)
-X<-train[,-1]
 
 trctrl_lda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
 lda_fit<-train(homeOutcome~., data=X, method="lda", trControl=trctrl_lda, preProcess = c("center", "scale"))
 lda_fit
+varImp(lda_fit)
 
 #prediction 
 lda_pred<-predict(lda_fit, newdata=test)
@@ -467,14 +515,33 @@ confusionMatrix(lda_pred, test$homeOutcome)
 ```
 
 ```{r}
-#quadratic discriminant analysis 
+#Linear discriminant analysis with repeated CV at 10 folds for 2 level factor
 
-X<-train[,-1]
+trctrl_ldaB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+lda_fitB<-train(homeWin~., data=XB, method="lda", trControl=trctrl_ldaB, preProcess = c("center", "scale"))
+lda_fitB
+varImp(lda_fitB)
+
+#prediction 
+lda_predB<-predict(lda_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(lda_predB, test$homeWin)
+
+
+```
+
+```{r}
+#quadratic discriminant analysis with 3 level factor dependent variable
 
 trctrl_qda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
 qda_fit<-train(homeOutcome~., data=X, method="qda", trControl=trctrl_qda, preProcess = c("center", "scale"))
+qda_fit
+varImp(qda_fit)
 
 #prediction 
 qda_pred<-predict(qda_fit, newdata=test)
@@ -484,16 +551,33 @@ confusionMatrix(qda_pred, test$homeOutcome)
 ```
 
 ```{r}
-#decision tree 
-library(rpart.plot)
+#quadratic discriminant analysis with 2 level factor dependent variable
 
-X<-train[,-1]
+trctrl_qdaB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+qda_fitB<-train(homeWin~., data=XB, method="qda", trControl=trctrl_qdaB, preProcess = c("center", "scale"))
+qda_fitB
+varImp(qda_fitB)
+
+#prediction 
+qda_predB<-predict(qda_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(qda_predB, test$homeWin)
+```
+
+
+```{r}
+#decision tree with 3 factor dependent variable 
+library(rpart.plot)
 
 trctrl_tree<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
 
 #training
 tree_fit<-train(homeOutcome~., data=X, method="rpart", trControl=trctrl_tree)
 tree_fit
+plot(tree_fit)
 varImp(tree_fit)
 
 #prediction 
@@ -508,16 +592,37 @@ rpart.plot(tree_fit$finalModel)
 
 
 ```{r}
-#random forest 
+#decision tree with 2 factor dependent variable
+
+trctrl_treeB<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+
+#training
+tree_fitB<-train(homeWin~., data=XB, method="rpart", trControl=trctrl_treeB)
+tree_fitB
+plot(tree_fitB)
+varImp(tree_fitB)
+
+#prediction 
+tree_predB<-predict(tree_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(tree_predB, test$homeWin)
+
+#plot
+rpart.plot(tree_fitB$finalModel)
+```
+
+```{r}
+#random forest with 3 factor dependent variable 
 require(e1071)
 require(randomForest)
-
-X<-train[,-1]
 
 trctrl_rf<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
 rf_fit<-train(homeOutcome~., data=X, method="rf", trControl=trctrl_rf)
+rf_fit
+plot(rf_fit)
 varImp(rf_fit)
 
 #prediction 
@@ -529,26 +634,59 @@ confusionMatrix(rf_pred, test$homeOutcome)
 
 ```
 
+```{r}
+#random forest with 2 factor dependent variable 
+
+trctrl_rfB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rf_fitB<-train(homeWin~., data=XB, method="rf", trControl=trctrl_rfB)
+rf_fitB
+plot(rf_fitB)
+varImp(rf_fitB)
+
+#prediction 
+rf_predB<-predict(rf_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rf_predB, test$homeWin)
+
+
+```
+
+
 
 ```{r}
-#Boosting 
+#Boosting with 2 factor dependent variable  
 require(gbm)
-
-X<-train[,-1]
 
 trctrl_rfBoost<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
 #training
 rfBoost_fit<-train(homeOutcome~., data=X, method="gbm", trControl=trctrl_rfBoost)
+rfBoost_fit
+plot(rfBoost_fit)
 
 #prediction 
 rfBoost_pred<-predict(rfBoost_fit, newdata=test)
 
 #confusion Matrix
 confusionMatrix(rfBoost_pred, test$homeOutcome)
-
-
-
 ```
+```{r}
+#Boosting with 3 factor dependent variable  
 
+trctrl_rfBoostB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rfBoost_fitB<-train(homeWin~., data=XB, method="gbm", trControl=trctrl_rfBoostB)
+rfBoost_fitB
+plot(rfBoost_fitB)
+
+#prediction 
+rfBoost_predB<-predict(rfBoost_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rfBoost_predB, test$homeWin)
+```
 
