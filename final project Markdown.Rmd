@@ -209,7 +209,6 @@ plot_wins_home_freq
 
 ```
 
-
 ```{r}
 #extracting team attributes and matching to games
 require(reshape)
@@ -299,6 +298,7 @@ for (i in 1:nrow(matchTeamAttHA)){
 matchTeamAttHA$homeOutcome<-as.factor(matchTeamAttHA$homeOutcome)
 ```
 
+_Seperation between the above descriptive statistics and data manipulation, and below the implementation of machine learning techniques to predict the outcome of the match._
 
 ```{r}
 
@@ -313,28 +313,6 @@ train<-train[,-c(1:9,11:16, 25)]
 test<-test[,-c(1:9,11:16,25)]
 
 ```
-
-```{r}
-#box plots 
-plot(train$homeOutcome, train$homeBuildUpPlaySpeed)
-plot(train$homeOutcome, train$homeBuildUpPlayPassing)
-plot(train$homeOutcome, train$homeChanceCreationPassing)
-plot(train$homeOutcome, train$homeChanceCreationCrossing)
-plot(train$homeOutcome, train$homeChanceCreationShooting)
-plot(train$homeOutcome, train$homeDefencePressure)
-plot(train$homeOutcome, train$homeDefenceAggression)
-plot(train$homeOutcome, train$homeDefenceTeamWidth)
-plot(train$homeOutcome, train$awayBuildUpPlaySpeed)
-plot(train$homeOutcome, train$awayBuildUpPlayPassing)
-plot(train$homeOutcome, train$awayChanceCreationPassing)
-plot(train$homeOutcome, train$awayChanceCreationCrossing)
-plot(train$homeOutcome, train$awayChanceCreationShooting)
-plot(train$homeOutcome, train$awayDefencePressure)
-plot(train$homeOutcome, train$awayDefenceAggression)
-plot(train$homeOutcome, train$awayDefenceTeamWidth)
-
-```
-
 
 ```{r}
 library(glmnet)
@@ -417,25 +395,25 @@ confusionMatrix(test_SVM_pred, test$homeOutcome)
 ```
 ```{r}
 #SVM for binomial outcome variable 
-#creating homeWin into a proper factor variable for SVM
+#creating homeWin into a proper factor variable for use in binomial models
 XB<-train[,-18]
 for(i in 1:length(XB$homeWin)){
   if (XB$homeWin[i]==1){
     XB$homeWin[i]<-"Win"
   }
   if(XB$homeWin[i]==0){
-    XB$homeWin[i]<-"Lose"
+    XB$homeWin[i]<-"NotWin"
   }
 }
 XB$homeWin<-as.factor(XB$homeWin)
 
-#making test homeWin into proper factor variable 
+#making test homeWin into proper factor variable for use in binomial models 
 for(i in 1:length(test$homeWin)){
   if (test$homeWin[i]==1){
     test$homeWin[i]<-"Win"
   }
   if(test$homeWin[i]==0){
-    test$homeWin[i]<-"Lose"
+    test$homeWin[i]<-"NotWin"
   }
 }
 test$homeWin<-as.factor(test$homeWin)
@@ -567,7 +545,6 @@ qda_predB<-predict(qda_fitB, newdata=test)
 confusionMatrix(qda_predB, test$homeWin)
 ```
 
-
 ```{r}
 #decision tree with 3 factor dependent variable 
 library(rpart.plot)
@@ -654,10 +631,8 @@ confusionMatrix(rf_predB, test$homeWin)
 
 ```
 
-
-
 ```{r}
-#Boosting with 2 factor dependent variable  
+#Boosting with 3 factor dependent variable  
 require(gbm)
 
 trctrl_rfBoost<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
@@ -674,7 +649,7 @@ rfBoost_pred<-predict(rfBoost_fit, newdata=test)
 confusionMatrix(rfBoost_pred, test$homeOutcome)
 ```
 ```{r}
-#Boosting with 3 factor dependent variable  
+#Boosting with 2 factor dependent variable  
 
 trctrl_rfBoostB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
 
