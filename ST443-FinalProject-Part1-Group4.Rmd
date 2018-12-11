@@ -1,0 +1,667 @@
+---
+title: "ST443 Final Project Part 1"
+author: "Carly Gottorff"
+date: "December 11, 2018"
+output: html_document
+---
+
+```{r}
+library("RSQLite")
+#Connect to data 
+db <- dbConnect(SQLite(),"C:/Users/cgott/Documents/ST449/Datasets/database.sqlite")
+## list all tables
+tables <- dbListTables(db)
+#Creating DF for each table
+Country <- dbGetQuery(db,"Select * from Country")
+League <- dbGetQuery(db,"Select * from League")
+Match <- dbGetQuery(db,"Select * from Match")
+Player <- dbGetQuery(db,"Select * from Player")
+Player_Attributes <- dbGetQuery(db,"Select * from Player_Attributes")
+Team <- dbGetQuery(db,"Select * from Team")
+Team_Attributes <- dbGetQuery(db,"Select * from Team_Attributes")
+
+```
+
+
+```{r}
+#Data Cleaning
+
+#extracting data by English league 
+leagueSplit<-dbGetQuery(db,"SELECT  league_id, season, home_team_api_id,
+            away_team_api_id, home_team_goal, away_team_goal, date, match_api_id
+           FROM Match 
+           WHERE league_id='1729' ")
+
+#counting number of away matches for each team with long name
+gamesPlayedAway<-dbGetQuery(db, "SELECT away_team_api_id, team_long_name, COUNT(away_team_api_id)
+           FROM Match JOIN Team
+            ON Match.away_team_api_id= Team.team_api_id
+           WHERE league_id='1729'
+           GROUP BY away_team_api_id")
+#counting number of home matches for each team
+gamesPlayedHome<-dbGetQuery(db, "SELECT home_team_api_id, COUNT(home_team_api_id)
+           FROM Match 
+           WHERE league_id='1729'
+           GROUP BY home_team_api_id")
+
+#merging away and home matches
+colnames(gamesPlayedAway)<-c("team_api_id","team_long_name", "away_games")
+colnames(gamesPlayedHome)= c("team_api_id", "home_games")
+gamesPlayedAH<-merge(gamesPlayedAway, gamesPlayedHome, by="team_api_id")
+#adding total games
+gamesPlayedAH$totalPlayed<-(gamesPlayedAH$away_games+gamesPlayedAH$home_games)
+```
+
+
+```{r}
+#creating outcome varibales for win, lose, tie for home team to count number of each for descriptive stats 
+for (i in 1:nrow(leagueSplit)){
+  if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
+    leagueSplit$homeTie[i]=1
+  } else{
+    leagueSplit$homeTie[i]=0
+  }
+  if(leagueSplit$home_team_goal[i]>leagueSplit$away_team_goal[i]){
+    leagueSplit$homeWin[i]=1
+  }else{
+    leagueSplit$homeWin[i]=0
+  }
+  if(leagueSplit$home_team_goal[i]<leagueSplit$away_team_goal[i]){
+    leagueSplit$homeLose[i]=1
+  }else{
+    leagueSplit$homeLose[i]=0
+  }
+}
+#creating win lose tie for away team
+for (i in 1:nrow(leagueSplit)){
+  if(leagueSplit$home_team_goal[i]==leagueSplit$away_team_goal[i]){
+    leagueSplit$awayTie[i]=1
+  } else{
+    leagueSplit$awayTie[i]=0
+  }
+  if(leagueSplit$away_team_goal[i]>leagueSplit$home_team_goal[i]){
+    leagueSplit$awayWin[i]=1
+  }else{
+    leagueSplit$awayWin[i]=0
+  }
+  if(leagueSplit$away_team_goal[i]<leagueSplit$home_team_goal[i]){
+    leagueSplit$awayLose[i]=1
+  }else{
+    leagueSplit$awayLose[i]=0
+  }
+}
+
+```
+
+
+```{r}
+library(dplyr)
+#counting number of wins, loses, ties by team
+
+#homeTie
+homeTie<-leagueSplit %>%
+  group_by(home_team_api_id, homeTie) %>%
+  tally()
+homeTie<-homeTie[homeTie$homeTie==1,] #removing cases of 0
+homeTie<-homeTie[,c(1,3)]
+colnames(homeTie)=c("team_api_id", "n_home_tie")
+
+#home win
+homeWin<-leagueSplit %>%
+  group_by(home_team_api_id, homeWin) %>%
+  tally()
+homeWin<-homeWin[homeWin$homeWin==1,] #removing cases of 0
+homeWin<-homeWin[,c(1,3)]
+colnames(homeWin)=c("team_api_id", "n_home_win")
+
+#home lose
+homeLose<-leagueSplit %>%
+  group_by(home_team_api_id, homeLose) %>%
+  tally()
+homeLose<-homeLose[homeLose$homeLose==1,] #removing cases of 0
+homeLose<-homeLose[,c(1,3)]
+colnames(homeLose)=c("team_api_id", "n_home_lose")
+
+#awayTie
+awayTie<-leagueSplit %>%
+  group_by(home_team_api_id, awayTie) %>%
+  tally()
+awayTie<-awayTie[awayTie$awayTie==1,] #removing cases of 0
+awayTie<-awayTie[,c(1,3)]
+colnames(awayTie)=c("team_api_id", "n_away_tie")
+
+#away win
+awayWin<-leagueSplit %>%
+  group_by(home_team_api_id, awayWin) %>%
+  tally()
+awayWin<-awayWin[awayWin$awayWin==1,] #removing cases of 0
+awayWin<-awayWin[,c(1,3)]
+colnames(awayWin)=c("team_api_id", "n_away_win")
+
+#away lose
+awayLose<-leagueSplit %>%
+  group_by(home_team_api_id, awayLose) %>%
+  tally()
+awayLose<-awayLose[awayLose$awayLose==1,] #removing cases of 0
+awayLose<-awayLose[,c(1,3)]
+colnames(awayLose)=c("team_api_id", "n_away_lose")
+
+#merging into gamesPlayedAH
+gamesPlayedAH<-merge(gamesPlayedAH,homeTie, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,homeWin, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,homeLose, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayTie, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayWin, by="team_api_id")
+gamesPlayedAH<-merge(gamesPlayedAH,awayLose, by="team_api_id")
+
+#checking
+gamesPlayedAH$tot<-(gamesPlayedAH$n_home_tie+gamesPlayedAH$n_home_win+gamesPlayedAH$n_home_lose+gamesPlayedAH$n_away_tie+gamesPlayedAH$n_away_lose+gamesPlayedAH$n_away_win)
+gamesPlayedAH$correct<-(gamesPlayedAH$totalPlayed==gamesPlayedAH$tot)
+```
+
+```{r}
+#creating total win lose tie variables
+gamesPlayedAH$totWin<-(gamesPlayedAH$n_home_win+gamesPlayedAH$n_away_win)
+gamesPlayedAH$totLose<-(gamesPlayedAH$n_home_lose+gamesPlayedAH$n_away_lose)
+gamesPlayedAH$totTie<-(gamesPlayedAH$n_home_tie+gamesPlayedAH$n_away_tie)
+
+#creating percent win tie for totals
+gamesPlayedAH$percWin<-(gamesPlayedAH$totWin/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percLose<-(gamesPlayedAH$totLose/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percTie<-(gamesPlayedAH$totTie/gamesPlayedAH$totalPlayed)*100
+
+#breakdownwin home or away by total wins 
+gamesPlayedAH$percWinHome<-(gamesPlayedAH$n_home_win/gamesPlayedAH$totWin)*100
+gamesPlayedAH$percWinAway<-(gamesPlayedAH$n_away_win/gamesPlayedAH$totWin)*100
+
+#breakdown win home or away by total games
+gamesPlayedAH$percWinHomeTot<-(gamesPlayedAH$n_home_win/gamesPlayedAH$totalPlayed)*100
+gamesPlayedAH$percWinAwayTot<-(gamesPlayedAH$n_away_win/gamesPlayedAH$totalPlayed)*100
+
+```
+
+
+```{r}
+#exploritory statistics
+
+#ordering data by the highest percent win
+gamesPlayedAH[order(-gamesPlayedAH$percWin),]
+#ordering data by highest percent win at home of all wins 
+gamesPlayedAH[order(-gamesPlayedAH$percWinHome),]
+#ordering by highest percent win away  of all wins 
+gamesPlayedAH[order(-gamesPlayedAH$percWinAway),]
+#ordering by highest percent win home by total games played
+gamesPlayedAH[order(-gamesPlayedAH$percWinHomeTot),]
+#odering by highest percent win away by total games played 
+gamesPlayedAH[order(-gamesPlayedAH$percWinAwayTot),]
+
+#frequency distribution of teams based on winning percentage
+library(ggplot2)
+plot_wins_freq <- 
+  ggplot(gamesPlayedAH,aes(percWin))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
+plot_wins_freq
+
+library(ggplot2)
+plot_wins_home_freq <- 
+  ggplot(gamesPlayedAH,aes(percWinHomeTot))+geom_area(stat="bin",bins=10,fill="light blue")+xlab("Winning percentage")
+plot_wins_home_freq
+
+
+```
+
+```{r}
+#extracting team attributes and matching to games
+require(reshape)
+library(dplyr)
+#creating season variable for teams to merge with games accurately. Because the season runs from 09-05. calculations done in 09 are for that years season start year, while calculations done in 02 are done for the previous years season start year.
+for (i in 1:length(Team_Attributes$date)){
+  if(substr(Team_Attributes$date[i],6,7)=="09"){
+    Team_Attributes$seasonStart[i]<-(substr(Team_Attributes$date[i],1,4))
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2016-02"){
+    Team_Attributes$seasonStart[i]<-"2015"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2015-02"){
+    Team_Attributes$seasonStart[i]<-"2014"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2014-02"){
+    Team_Attributes$seasonStart[i]<-"2013"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2013-02"){
+    Team_Attributes$seasonStart[i]<-"2012"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2012-02"){
+    Team_Attributes$seasonStart[i]<-"2011"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2011-02"){
+    Team_Attributes$seasonStart[i]<-"2010"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2010-02"){
+    Team_Attributes$seasonStart[i]<-"2009"
+  }
+  if(substr(Team_Attributes$date[i],1,7)=="2009-02"){
+    Team_Attributes$seasonStart[i]<-"2008"
+  }
+}
+
+
+#seperating season to get the start year in order to merge with team attributes
+for(i in 1:length(leagueSplit$season)){
+  leagueSplit$seasonStart[i]<-substr(leagueSplit$season[i],1,4)
+}
+
+#creating identifier to merge game data to home team stats for that season
+
+leagueSplit$p1<-paste0(leagueSplit$seasonStart, leagueSplit$home_team_api_id)
+Team_Attributes$p1<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+
+#merging 
+matchTeamAttHome <- merge(leagueSplit, Team_Attributes, by= "p1", all=FALSE)
+#removing unnecessary columns 
+matchTeamAttHome<- matchTeamAttHome[,-c(1,17,18,19,22,23,24,26,27,29,31,33,34,36,38,40,41,42)]
+#renaming columns to merge
+colnames(matchTeamAttHome)[7]<-"matchDate"
+colnames(matchTeamAttHome)[16]<-"homeStatsTakenDate"
+colnames(matchTeamAttHome)[17:24]<-c("homeBuildUpPlaySpeed", "homeBuildUpPlayPassing", "homeChanceCreationPassing", "homeChanceCreationCrossing", "homeChanceCreationShooting", "homeDefencePressure", "homeDefenceAggression", "homeDefenceTeamWidth")
+
+#creating identifier to merge game data to away team stats for that season
+leagueSplit$p2<-paste0(leagueSplit$seasonStart, leagueSplit$away_team_api_id)
+Team_Attributes$p2<-paste0(Team_Attributes$seasonStart, Team_Attributes$team_api_id)
+#merging match data and away team data using method specified above
+matchTeamAttAway <- merge(leagueSplit, Team_Attributes, by= "p2", all=FALSE)
+#removing all unneccessary columns 
+matchTeamAttAway<- matchTeamAttAway[,-c(1:8,10:20,23:25,27,28,30,32,34,35,37,39,41,42,43,44)]
+#renaming columns 
+colnames(matchTeamAttAway)[2]<-"awayStatsTakenDate"
+colnames(matchTeamAttAway)[3:10]<-c("awayBuildUpPlaySpeed", "awayBuildUpPlayPassing", "awayChanceCreationPassing", "awayChanceCreationCrossing", "awayChanceCreationShooting", "awayDefencePressure", "awayDefenceAggression", "awayDefenceTeamWidth")
+
+#760 values missing from each set beacuse there are no stats on those teams in that year. no stats for the 2008/2009 season. No stats for teams taken before 2010. the first stats start in 02-2010, which are coded into the 2009/2010 season for the reason exlained above.
+
+#merging home and away 
+matchTeamAttHA<-merge(matchTeamAttHome, matchTeamAttAway, by="match_api_id")
+```
+
+```{r}
+#creating outcome varibale for win, lose, tie for home team to be our categorical independent variable for the following models 
+for (i in 1:nrow(matchTeamAttHA)){
+  if(matchTeamAttHA$home_team_goal[i]==matchTeamAttHA$away_team_goal[i]){
+    matchTeamAttHA$homeOutcome[i]="Tie"
+  } 
+  if(matchTeamAttHA$home_team_goal[i]>matchTeamAttHA$away_team_goal[i]){
+    matchTeamAttHA$homeOutcome[i]="Win"
+  }
+  if(matchTeamAttHA$home_team_goal[i]<matchTeamAttHA$away_team_goal[i]){
+    matchTeamAttHA$homeOutcome[i]="Lose"
+  }
+}
+#making the Y a factor variable
+matchTeamAttHA$homeOutcome<-as.factor(matchTeamAttHA$homeOutcome)
+```
+
+_Seperation between the above descriptive statistics and data manipulation, and below the implementation of machine learning techniques to predict the outcome of the match._
+
+```{r}
+
+#splitting into training and testing randomly with %85 in training and 15% in testing 
+set.seed(88)
+sample <- sample.int(n = nrow(matchTeamAttHA), size = floor(.85*nrow(matchTeamAttHA)), replace = F)
+train<- matchTeamAttHA[sample, ]
+test<- matchTeamAttHA[-sample, ]
+
+#removing extra columns, leaving only y and X
+train<-train[,-c(1:9,11:16, 25)]
+test<-test[,-c(1:9,11:16,25)]
+
+```
+
+```{r}
+library(glmnet)
+#multinomial logistic regression with lasso and CV
+#converting from df to matrix 
+X<-as.matrix(train[,-c(1,18)])
+Y<-train[,18]
+testX<-as.matrix(test[,-c(1,18)])
+testY<-test[,18]
+
+glmmod.multiLogit<-glmnet(X,Y,alpha = 1, family="multinomial")
+plot(glmmod.multiLogit,xvar = "lambda", label = TRUE)
+plot(glmmod.multiLogit,xvar = "dev", label = TRUE)
+
+fit.lasso.cv.multiLogit<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="multinomial")
+plot(fit.lasso.cv.multiLogit)
+
+fit.lasso.best.multiLogit<-glmnet(X,Y,family = "multinomial", alpha=1, lambda=fit.lasso.cv.multiLogit$lambda.min)
+
+fit.lasso.pred.multiLogit<-predict(fit.lasso.best.multiLogit, testX, type="response")
+fit.lasso.pred.multiLogit
+
+predicted.multiLogit <- colnames(fit.lasso.pred.multiLogit)[apply(fit.lasso.pred.multiLogit,1,which.max)]
+confusionMatrix_logit<-table(predicted.multiLogit, test[,18])
+confusionMatrix_logit
+accuracy<-(confusionMatrix_logit[1,1]+confusionMatrix_logit[2,2]+confusionMatrix_logit[3,3])/NROW(test)
+accuracy
+
+#justification for use of Lasso rather than ridge
+foldid=sample(1:10,size=length(Y),replace=TRUE)
+cv1=cv.glmnet(X,Y,foldid = foldid, alpha=1, family="multinomial" )
+cv.5=cv.glmnet(X,Y,foldid = foldid, alpha=.5, family="multinomial")
+cv0=cv.glmnet(X,Y,foldid = foldid, alpha=0, family="multinomial")
+plot(cv1);plot(cv.5);plot(cv0)
+plot(log(cv1$lambda),cv1$cvm,pch=19,col="red",xlab="log(Lambda)",ylab=cv1$name)
+points(log(cv.5$lambda),cv.5$cvm,pch=19,col="grey")
+points(log(cv0$lambda),cv0$cvm,pch=19,col="blue")
+legend("topleft",legend=c("alpha= 1","alpha= .5","alpha 0"),pch=19,col=c("red","grey","blue"))
+
+```
+
+```{r}
+#running Binomial logistic regression on outcome of home win (1,0)
+
+X<-as.matrix(train[,-c(1,18)])
+Y<-train[,1]
+testX<-as.matrix(test[,-c(1,18)])
+testY<-test[,1]
+
+fit.lasso.cv.logit<-cv.glmnet(X, Y, type.measure = "mse", alpha=1, family="binomial")
+
+#training
+fit.lasso.best.logit<-glmnet(X,Y,family = "binomial", alpha=1, lambda=fit.lasso.cv.logit$lambda.min)
+
+#testing
+fit.lasso.pred.logit<-predict(fit.lasso.best.logit, testX, type="class")
+
+#accuracy
+sum(fit.lasso.pred.logit=testY)/length(testY)
+```
+
+```{r}
+#support vector machine using repeating cv at 10 folds for categorical homeOutcome at 3 levels 
+
+library(caret)
+library(kernlab)
+X<-train[,-1]
+
+trctrl_svm <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+ 
+#training
+svm_Radial <- train(homeOutcome~., data=X, method = "svmRadial",trControl=trctrl_svm, preProcess = c("center", "scale"))
+svm_Radial
+plot(svm_Radial)
+varImp(svm_Radial)
+
+#testing
+test_SVM_pred<-predict(svm_Radial, newdata=test)
+confusionMatrix(test_SVM_pred, test$homeOutcome)
+```
+```{r}
+#SVM for binomial outcome variable 
+#creating homeWin into a proper factor variable for use in binomial models
+XB<-train[,-18]
+for(i in 1:length(XB$homeWin)){
+  if (XB$homeWin[i]==1){
+    XB$homeWin[i]<-"Win"
+  }
+  if(XB$homeWin[i]==0){
+    XB$homeWin[i]<-"NotWin"
+  }
+}
+XB$homeWin<-as.factor(XB$homeWin)
+
+#making test homeWin into proper factor variable for use in binomial models 
+for(i in 1:length(test$homeWin)){
+  if (test$homeWin[i]==1){
+    test$homeWin[i]<-"Win"
+  }
+  if(test$homeWin[i]==0){
+    test$homeWin[i]<-"NotWin"
+  }
+}
+test$homeWin<-as.factor(test$homeWin)
+
+trctrl_svmB <- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+ 
+#training 
+svm_RadialB <- train(homeWin~., data=XB, method = "svmRadial",trControl=trctrl_svmB, preProcess = c("center", "scale"))
+svm_RadialB
+plot(svm_RadialB)
+varImp(svm_RadialB)
+
+#testing
+test_SVM_predB<-predict(svm_RadialB, newdata=test)
+
+confusionMatrix(test_SVM_predB, test$homeWin)
+
+```
+
+```{r}
+#k nearest neighbors using repeating CV at 10 folds with 3 level factor dependent variable win, lose, tie. 
+
+trctrl_knn<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+knn_fit<-train(homeOutcome~., data=X, method="knn", trControl=trctrl_knn, tuneGrid= expand.grid(k = 1:10), preProcess=c("center","scale"))
+knn_fit
+plot(knn_fit)
+varImp(knn_fit)
+
+#prediction 
+knn_pred<-predict(knn_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(knn_pred, test$homeOutcome)
+
+```
+
+```{r}
+#k nearest neighbors using repeating CV at 10 folds with 2 level factor dependent variable win, lose, tie. 
+
+trctrl_knnB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+knn_fitB<-train(homeWin~., data=XB, method="knn", trControl=trctrl_knnB, tuneGrid= expand.grid(k = 1:10), preProcess=c("center","scale"))
+knn_fitB
+plot(knn_fitB)
+varImp(knn_fitB)
+
+#prediction 
+knn_predB<-predict(knn_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(knn_predB, test$homeWin)
+
+```
+
+
+```{r}
+#Linear discriminant analysis with repeated CV at 10 folds for 3 level factor 
+require(MASS)
+
+trctrl_lda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+lda_fit<-train(homeOutcome~., data=X, method="lda", trControl=trctrl_lda, preProcess = c("center", "scale"))
+lda_fit
+varImp(lda_fit)
+
+#prediction 
+lda_pred<-predict(lda_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(lda_pred, test$homeOutcome)
+
+
+```
+
+```{r}
+#Linear discriminant analysis with repeated CV at 10 folds for 2 level factor
+
+trctrl_ldaB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+lda_fitB<-train(homeWin~., data=XB, method="lda", trControl=trctrl_ldaB, preProcess = c("center", "scale"))
+lda_fitB
+varImp(lda_fitB)
+
+#prediction 
+lda_predB<-predict(lda_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(lda_predB, test$homeWin)
+
+
+```
+
+```{r}
+#quadratic discriminant analysis with 3 level factor dependent variable
+
+trctrl_qda<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+qda_fit<-train(homeOutcome~., data=X, method="qda", trControl=trctrl_qda, preProcess = c("center", "scale"))
+qda_fit
+varImp(qda_fit)
+
+#prediction 
+qda_pred<-predict(qda_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(qda_pred, test$homeOutcome)
+```
+
+```{r}
+#quadratic discriminant analysis with 2 level factor dependent variable
+
+trctrl_qdaB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+qda_fitB<-train(homeWin~., data=XB, method="qda", trControl=trctrl_qdaB, preProcess = c("center", "scale"))
+qda_fitB
+varImp(qda_fitB)
+
+#prediction 
+qda_predB<-predict(qda_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(qda_predB, test$homeWin)
+```
+
+```{r}
+#decision tree with 3 factor dependent variable 
+library(rpart.plot)
+
+trctrl_tree<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+
+#training
+tree_fit<-train(homeOutcome~., data=X, method="rpart", trControl=trctrl_tree)
+tree_fit
+plot(tree_fit)
+varImp(tree_fit)
+
+#prediction 
+tree_pred<-predict(tree_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(tree_pred, test$homeOutcome)
+
+#plot
+rpart.plot(tree_fit$finalModel)
+```
+
+
+```{r}
+#decision tree with 2 factor dependent variable
+
+trctrl_treeB<- trainControl(method = "repeatedcv", number = 10, repeats = 3, classProbs = TRUE)
+
+#training
+tree_fitB<-train(homeWin~., data=XB, method="rpart", trControl=trctrl_treeB)
+tree_fitB
+plot(tree_fitB)
+varImp(tree_fitB)
+
+#prediction 
+tree_predB<-predict(tree_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(tree_predB, test$homeWin)
+
+#plot
+rpart.plot(tree_fitB$finalModel)
+```
+
+```{r}
+#random forest with 3 factor dependent variable 
+require(e1071)
+require(randomForest)
+
+trctrl_rf<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rf_fit<-train(homeOutcome~., data=X, method="rf", trControl=trctrl_rf)
+rf_fit
+plot(rf_fit)
+varImp(rf_fit)
+
+#prediction 
+rf_pred<-predict(rf_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rf_pred, test$homeOutcome)
+
+
+```
+
+```{r}
+#random forest with 2 factor dependent variable 
+
+trctrl_rfB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rf_fitB<-train(homeWin~., data=XB, method="rf", trControl=trctrl_rfB)
+rf_fitB
+plot(rf_fitB)
+varImp(rf_fitB)
+
+#prediction 
+rf_predB<-predict(rf_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rf_predB, test$homeWin)
+
+
+```
+
+```{r}
+#Boosting with 3 factor dependent variable  
+require(gbm)
+
+trctrl_rfBoost<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rfBoost_fit<-train(homeOutcome~., data=X, method="gbm", trControl=trctrl_rfBoost)
+rfBoost_fit
+plot(rfBoost_fit)
+
+#prediction 
+rfBoost_pred<-predict(rfBoost_fit, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rfBoost_pred, test$homeOutcome)
+```
+```{r}
+#Boosting with 2 factor dependent variable  
+
+trctrl_rfBoostB<- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+#training
+rfBoost_fitB<-train(homeWin~., data=XB, method="gbm", trControl=trctrl_rfBoostB)
+rfBoost_fitB
+plot(rfBoost_fitB)
+
+#prediction 
+rfBoost_predB<-predict(rfBoost_fitB, newdata=test)
+
+#confusion Matrix
+confusionMatrix(rfBoost_predB, test$homeWin)
+```
+

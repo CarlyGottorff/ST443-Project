@@ -1,7 +1,7 @@
 ---
-title: "Final Project Markdown"
+title: "ST443 Final Project Part 1"
 author: "Carly Gottorff"
-date: "November 27, 2018"
+date: "December 11, 2018"
 output: html_document
 ---
 
