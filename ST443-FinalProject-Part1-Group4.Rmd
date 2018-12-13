@@ -1,6 +1,6 @@
 ---
 title: "ST443 Final Project Part 1"
-author: "Carly Gottorff"
+author: "Group 4"
 date: "December 11, 2018"
 output: html_document
 ---
